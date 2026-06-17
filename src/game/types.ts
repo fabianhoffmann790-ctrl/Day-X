@@ -96,6 +96,7 @@ export interface HudState {
   timeText: string;
   weather: WeatherType;
   noiseLevel: string;
+  damageFlash: number;
 }
 
 export interface LootPoolEntry {
