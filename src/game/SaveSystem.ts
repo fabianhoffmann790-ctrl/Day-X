@@ -30,6 +30,7 @@ export class SaveSystem {
       if (typeof parsed.timeOfDay !== 'number') parsed.timeOfDay = 8.25;
       if (!VALID_WEATHER.includes(parsed.weather)) parsed.weather = 'cloudy';
       if (!parsed.magazines) parsed.magazines = {};
+      if (!Array.isArray(parsed.campfires)) parsed.campfires = [];
       return parsed;
     } catch {
       return null;
