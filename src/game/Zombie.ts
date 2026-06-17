@@ -45,11 +45,12 @@ export class Zombie {
     return this.hp > 0;
   }
 
-  damage(amount: number) {
+  damage(amount: number, sourcePosition?: THREE.Vector3) {
     this.hp -= amount;
     this.alerted = true;
     this.state = 'chasing';
-    this.lastKnownPlayerPosition.copy(this.mesh.position);
+    if (sourcePosition) this.lastKnownPlayerPosition.copy(sourcePosition);
+    else this.lastKnownPlayerPosition.copy(this.mesh.position);
     if (this.hp <= 0) this.mesh.visible = false;
   }
 
