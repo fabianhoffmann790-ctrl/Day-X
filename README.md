@@ -25,10 +25,16 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Shift: Sprinten
 - C oder Strg: Schleichen
 - Space: Springen
-- E: Item im Lootspot aufnehmen, wenn du direkt darauf schaust
+- E: Loot, Türen, Container, Fahrzeuge oder Storage-Kisten interagieren
 - Tab: Inventar ein-/ausblenden
 - K: Crafting-Menü öffnen/schließen
 - 4-9 und 0: sichtbare Crafting-Rezepte ausführen, wenn Crafting geöffnet ist
+- M: Karte öffnen/schließen, wenn Karte im Inventar ist
+- N: Basebuilding-Bauteil wechseln und Baumodus aktivieren
+- P: gewähltes Basebuilding-Element platzieren
+- O: erstes nicht-ausgerüstetes Item in offene Storage-Kiste legen
+- I: erstes Item aus offener Storage-Kiste ins Inventar nehmen
+- Esc: Storage-Kiste schließen
 - R: Ausgerüstete Schusswaffe nachladen
 - 1/2/3: Waffe wechseln, wenn vorhanden
 - V: beste Rüstung/Kleidung ausrüsten
@@ -50,29 +56,28 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Betretbare Platzhalter-Gebäude mit dunkleren Innenbereichen, Eingängen und passenden Lootspots
 - First-Person-Controller mit Pointer Lock
 - HP, Ausdauer, Hunger, Durst, Blutung, Infektion, Krankheit, Schmerz, Nässe, Kälte und Körpertemperatur
-- Bewusstlosigkeit und Knochenbruch sind als Statuswerte vorbereitet
 - Kleidungssystem mit Slots: Kopf, Oberkörper, Beine, Schuhe, Hände, Weste/Rüstung und Rucksack
-- Kleidung beeinflusst Schadenreduktion, Wärme, Regenschutz, Kapazität und Gewicht
-- Items haben Zustand: neu, gut, abgenutzt, beschädigt, stark beschädigt, ruiniert
-- Beschädigte Kleidung, Rucksäcke und Waffen wirken schlechter; ruinierte Items können nicht benutzt/ausgerüstet werden
+- Items haben Zustand, Gewicht und Gameplay-Wirkung
 - Reparatursystem mit Nähset, Klebeband, Werkzeugkasten und Waffenreinigungsset
-- Crafting-System mit Lumpen, improvisiertem Verband, Fackel, Lagerfeuer-Set, improvisiertem Rucksack, Holzspeer und abgekochtem Wasser als vorbereiteter Mechanik
+- Crafting-System mit einfachen Rezepten
 - Lagerfeuer kann platziert werden, brennt begrenzt, erzeugt Licht und wärmt den Spieler
-- Nahrung und Wasser können krank machen, wenn sie verdorben oder schmutzig sind
-- Medizin behandelt Blutung, Schmerz, Infektion und Krankheit
-- Waffen haben Magazine, Munitionstypen, Zustand und einfache Ladehemmungswahrscheinlichkeit
-- Nahkampf verbraucht Ausdauer und beschädigt die Waffe
-- Gewicht beeinflusst Ausdauerverbrauch, Regeneration und Sprintfähigkeit
-- Zeitbasierte Aktionen mit Fortschrittsbalken für Essen, Trinken, Medizin, Nachladen, Reparatur, Crafting und Feuer
+- Türen-System: Türen können geöffnet, geschlossen, verschlossen, mit Schlüssel geöffnet, mit Dietrich geöffnet oder laut aufgebrochen werden
+- Zugangssystem mit einfachem Schlüssel, Dietrich, Polizeischlüssel, Klinikschlüssel und Militär-Zugangskarte
+- Container-System: Schränke, Kühlschränke, Spinde, Waffenschränke, Medizinschränke, Werkzeugkisten, Militärkisten, Mülltonnen und Fahrzeug-Kofferäume
+- Fahrzeuge als Deckung und lootbare Kofferraum-Container: Auto, Polizeiauto, Krankenwagen, Militärfahrzeug und Lieferwagen
+- Basebuilding-Grundsystem: Barrikade, Storage-Kiste, Holzwand, Holztor, Zaunsegment und Schlafsack vorbereitet
+- Storage-System: platzierbare Storage-Kiste mit persistierendem Inhalt
+- Dynamische Events: Rauchsignal, Helikopter-Crash, Militärkonvoi, seltene Loot-Kiste und Gebäudealarm vorbereitet
+- Zombie-Horde als wandernde Gefahr, die auf laute Geräusche reagieren kann
+- Dezentes Hinweis-/Missionssystem über Notizzettel, Signalhinweise, POI-Namen und Event-Hinweise
+- Einfache Orientierung mit Karte und Kompass-Anzeige
+- Persistente Weltzustände: Türen, Container, platzierte Objekte, Storage-Inhalte, Events, Horden, Lagerfeuer und Lootspots werden gespeichert
+- Zeitbasierte Aktionen mit Fortschrittsbalken für Essen, Trinken, Medizin, Nachladen, Reparatur, Crafting, Türen aufbrechen, Container durchsuchen und Bauen
 - Aktionen brechen ab, wenn der Spieler sich zu weit bewegt oder getroffen wird
-- Lootspots mit Spawn-Chance, maximal einem Item, geplündertem Zustand und vorbereitetem Respawn-Zeitpunkt
-- Zonenbasierte Zombiespawns: Wohngebiet, Markt, Polizei, Klinik, Industrie, Militär, Wald und Straßen
-- Zombies mit Idle, Wandern, Sicht, Geräuschreaktion, Verfolgung, Suche und Nahkampfangriff
-- Einfaches Tag-Nacht-System mit veränderter Lichtfarbe, Helligkeit und Sichtweite
-- Einfaches Wetter-System mit klar, bewölkt, Regen und Nebel inklusive Fog-/Regen-Platzhaltereffekten
-- Eigenständige Platzhalter-Soundstruktur für Schritte, Sprinten, Zombies, Schüsse, Nachladen, Loot, Konsum und Verletzung
-- HUD, Statuswarnungen, Interaktionsanzeige, Schadens-Flash, Inventar-Overlay und Crafting-Overlay
-- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, Item-Zustände, Kleidungsslots, Magazine, geplünderte Lootspots, Tageszeit, Wetter und Lagerfeuer
+- Zonenbasierte Zombiespawns und verbesserte Zombie-KI
+- Tag-Nacht-System und Wetter-System
+- HUD, Statuswarnungen, Interaktionsanzeige, Event-Hinweise, Karten-/Storage-Overlay, Schadens-Flash und Inventar-Overlay
+- Lokales Save-System über `localStorage`
 - Zentrale Balancing-Datei: `src/game/Balance.ts`
 
 ## Design-Regel
