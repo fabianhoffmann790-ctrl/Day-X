@@ -21,6 +21,8 @@ export class SaveSystem {
       if (!VALID_WEATHER.includes(parsed.weather)) parsed.weather = 'cloudy';
       if (!parsed.magazines) parsed.magazines = {};
       if (!Array.isArray(parsed.campfires)) parsed.campfires = [];
+      if (!Array.isArray(parsed.droppedItems)) parsed.droppedItems = [];
+      if (typeof parsed.selectedItemId !== 'string') parsed.selectedItemId = null;
       if (!parsed.persistentWorld) parsed.persistentWorld = { doors: [], containers: [], placedObjects: [], dynamicEvents: [], hordes: [], discoveredHints: [] };
       if (!Array.isArray(parsed.persistentWorld.doors)) parsed.persistentWorld.doors = [];
       if (!Array.isArray(parsed.persistentWorld.containers)) parsed.persistentWorld.containers = [];
