@@ -11,7 +11,9 @@ export type ItemType =
   | 'tool';
 
 export type BuildingType = 'house' | 'market' | 'police' | 'military' | 'hospital' | 'workshop';
+export type ZoneType = 'residential' | 'market' | 'police' | 'hospital' | 'industrial' | 'military' | 'forest' | 'road';
 export type WeaponKind = 'melee' | 'ranged';
+export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'fog';
 
 export interface WeaponDefinition {
   kind: WeaponKind;
@@ -83,11 +85,18 @@ export interface HudState {
   weapon: string;
   ammo: number;
   ammoText: string;
+  currentBackpack: string;
+  currentArmor: string;
   zombiesAlerted: number;
   interactionPrompt: string;
   message: string;
+  warning: string;
   inventoryOpen: boolean;
   inventory: InventoryEntry[];
+  timeText: string;
+  weather: WeatherType;
+  noiseLevel: string;
+  damageFlash: number;
 }
 
 export interface LootPoolEntry {
@@ -108,6 +117,23 @@ export interface SpawnedLoot {
   count: number;
 }
 
+export interface LootSpotSaveData {
+  id: string;
+  taken: boolean;
+  itemId: string | null;
+  count: number;
+  respawnAt: number | null;
+}
+
+export interface SpawnZoneDefinition {
+  id: string;
+  type: ZoneType;
+  position: { x: number; z: number };
+  radius: number;
+  maxZombies: number;
+  spawnChance: number;
+}
+
 export interface SaveGameState {
   version: 1;
   savedAt: number;
@@ -119,4 +145,7 @@ export interface SaveGameState {
   stats: PlayerVitals;
   inventory: InventorySaveData;
   magazines: Record<string, number>;
+  lootSpots: LootSpotSaveData[];
+  timeOfDay: number;
+  weather: WeatherType;
 }

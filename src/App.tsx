@@ -16,11 +16,25 @@ const initialHud: HudState = {
   weapon: 'Fäuste',
   ammo: 0,
   ammoText: 'Nahkampf',
+  currentBackpack: 'Kein Rucksack',
+  currentArmor: 'Keine Rüstung',
   zombiesAlerted: 0,
   interactionPrompt: '',
   message: 'Klicke auf Start und danach ins Spiel, um die Maus zu sperren.',
+  warning: '',
   inventoryOpen: false,
-  inventory: []
+  inventory: [],
+  timeText: '08:15',
+  weather: 'cloudy',
+  noiseLevel: 'leise',
+  damageFlash: 0
+};
+
+const weatherLabels = {
+  clear: 'klar',
+  cloudy: 'bewölkt',
+  rain: 'Regen',
+  fog: 'Nebel'
 };
 
 export default function App() {
@@ -38,12 +52,12 @@ export default function App() {
             Alles ist ein eigenständiger Platzhalter-Prototyp ohne fremde Markenassets.
           </p>
           <div className="menu-grid">
-            <span>First-Person</span>
+            <span>Open-World-Prototyp</span>
             <span>Lootspots</span>
-            <span>Hunger / Durst</span>
-            <span>Zombie-KI</span>
+            <span>Tag / Nacht</span>
+            <span>Wetter</span>
             <span>Inventar</span>
-            <span>Waffen</span>
+            <span>Zonen-Zombies</span>
           </div>
           <button onClick={() => setStarted(true)}>Prototyp starten</button>
           <small>Tab: Inventar · E: Aufheben · R: Nachladen · F/G/H: Essen/Trinken/Medizin · F6/F9: Speichern/Laden</small>
@@ -56,6 +70,11 @@ export default function App() {
     <main className="game-screen">
       <GameCanvas onHudChange={setHud} />
       <section className="hud">
+        <div className="meta-row">
+          <span>Zeit: {hud.timeText}</span>
+          <span>Wetter: {weatherLabels[hud.weather]}</span>
+          <span>Geräusch: {hud.noiseLevel}</span>
+        </div>
         <div className="stat"><span>HP</span><meter min="0" max="100" value={hud.hp} /><b>{hud.hp}</b></div>
         <div className="stat"><span>Ausdauer</span><meter min="0" max="100" value={hud.stamina} /><b>{hud.stamina}</b></div>
         <div className="stat"><span>Hunger</span><meter min="0" max="100" value={hud.hunger} /><b>{hud.hunger}</b></div>
@@ -71,20 +90,25 @@ export default function App() {
           <span>Munition: {hud.ammoText}</span>
           <span>Inventar: {hud.usedSlots}/{hud.capacity}</span>
         </div>
+        <div className="quick-row">
+          <span>Rucksack: {hud.currentBackpack}</span>
+          <span>Schutz: {hud.currentArmor}</span>
+        </div>
+        {hud.warning ? <p className="warning">{hud.warning}</p> : null}
         {hud.interactionPrompt ? <p className="interaction">{hud.interactionPrompt}</p> : null}
         <p className="message">{hud.message}</p>
       </section>
       {hud.inventoryOpen && (
         <aside className="inventory">
           <h2>Inventar</h2>
-          <p className="inventory-help">F = beste Nahrung · G = bestes Getränk · H = Medizin · 1/2/3 = Waffe ausrüsten · X = Drop vorbereitet</p>
+          <p className="inventory-help">F = beste Nahrung · G = bestes Getränk · H = Medizin · 1/2/3 = Waffe · V = beste Rüstung · B = bester Rucksack · F10 = Debug-Lootrespawn</p>
           {hud.inventory.length === 0 ? <p>Leer. Suche Gebäude ab.</p> : null}
           <ul>
             {hud.inventory.map((entry) => (
               <li key={entry.id} className={entry.equipped ? 'equipped' : ''}>
                 <div>
                   <strong>{entry.name}</strong>
-                  <small>{entry.type} · Slots: {entry.size}</small>
+                  <small>{entry.type} · Slots/Gewicht vorbereitet: {entry.size}</small>
                   <small>{entry.canUse ? 'verwendbar' : ''}{entry.canUse && entry.canEquip ? ' · ' : ''}{entry.canEquip ? 'ausrüstbar' : ''}</small>
                 </div>
                 <span>x{entry.count}{entry.equipped ? ' ✓' : ''}</span>
@@ -94,6 +118,7 @@ export default function App() {
         </aside>
       )}
       <div className="crosshair" />
+      {hud.damageFlash > 0 ? <div className="damage-flash" style={{ opacity: Math.min(0.45, hud.damageFlash * 0.45) }} /> : null}
     </main>
   );
 }

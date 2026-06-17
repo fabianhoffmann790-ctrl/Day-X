@@ -1,3 +1,4 @@
+import { BALANCE } from './Balance';
 import type { PlayerVitals } from './types';
 
 export const DEFAULT_PLAYER_VITALS: PlayerVitals = {
@@ -15,19 +16,19 @@ export function cloneDefaultVitals(): PlayerVitals {
 }
 
 export function updatePlayerVitals(stats: PlayerVitals, delta: number) {
-  stats.hunger = Math.max(0, stats.hunger - delta * 0.34);
-  stats.thirst = Math.max(0, stats.thirst - delta * 0.56);
+  stats.hunger = Math.max(0, stats.hunger - (BALANCE.vitals.hungerLossPerMinute / 60) * delta);
+  stats.thirst = Math.max(0, stats.thirst - (BALANCE.vitals.thirstLossPerMinute / 60) * delta);
 
-  if (stats.bleeding) stats.hp = Math.max(0, stats.hp - delta * 1.05);
-  if (stats.hunger <= 0 || stats.thirst <= 0) stats.hp = Math.max(0, stats.hp - delta * 1.35);
+  if (stats.bleeding) stats.hp = Math.max(0, stats.hp - BALANCE.vitals.bleedingDamagePerSecond * delta);
+  if (stats.hunger <= 0 || stats.thirst <= 0) stats.hp = Math.max(0, stats.hp - BALANCE.vitals.starvationDamagePerSecond * delta);
 
   if (stats.infected) {
-    stats.infection = Math.min(100, stats.infection + delta * 0.18);
-    if (stats.infection >= 70) stats.hp = Math.max(0, stats.hp - delta * 0.65);
+    stats.infection = Math.min(100, stats.infection + BALANCE.vitals.infectionGrowthPerSecond * delta);
+    if (stats.infection >= 70) stats.hp = Math.max(0, stats.hp - BALANCE.vitals.severeInfectionDamagePerSecond * delta);
   }
 }
 
-export function applyDamage(stats: PlayerVitals, rawDamage: number, armorReduction: number, bleedChance: number) {
+export function applyDamage(stats: PlayerVitals, rawDamage: number, armorReduction: number, bleedChance = BALANCE.zombie.bleedChance) {
   const mitigatedDamage = rawDamage * (1 - armorReduction);
   stats.hp = Math.max(0, stats.hp - mitigatedDamage);
   const startedBleeding = Math.random() < bleedChance;

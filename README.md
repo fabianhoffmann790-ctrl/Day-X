@@ -29,27 +29,36 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Tab: Inventar ein-/ausblenden
 - R: Ausgerüstete Schusswaffe nachladen
 - 1/2/3: Waffe wechseln, wenn vorhanden
+- V: beste Rüstung/Kleidung ausrüsten
+- B: besten Rucksack ausrüsten
 - F: beste Nahrung verwenden
 - G: bestes Getränk verwenden
 - H: Medizin verwenden
 - F6: Spielstand speichern
 - F9: Spielstand laden
+- F10: Debug-Lootrespawn
 - X: Drop-System ist vorbereitet, aber noch nicht aktiv
 
 ## Prototyp-Inhalt
 
 - Hauptmenü
-- Three.js-Spielwelt mit Platzhalter-Gebäuden
+- Größere Open-World-Platzhalterkarte mit Siedlung, Straßen, Waldstücken, Feldern, Fahrzeugwracks, Zäunen, Klinik, Polizei, Supermarkt, Werkstatt/Lagerhalle und Militär-Checkpoint
+- Betretbare Platzhalter-Gebäude mit dunkleren Innenbereichen, Eingängen und passenden Lootspots
 - First-Person-Controller mit Pointer Lock
 - HP, Ausdauer, Hunger, Durst, Blutung und vorbereitetem Infektionsstatus
-- Inventar mit begrenzten Slots, ausrüstbaren Waffen, Rüstung und Rucksäcken
+- Inventar mit begrenzten Slots, ausrüstbaren Waffen, Rüstung/Kleidung und Rucksäcken
 - Rucksäcke erhöhen die Kapazität, Rüstung reduziert Schaden
-- Lootspots mit Spawn-Chance, maximal einem Item und Gebäudetyp-spezifischen Itempools
+- Lootspots mit Spawn-Chance, maximal einem Item, geplündertem Zustand und vorbereitetem Respawn-Zeitpunkt
 - Itempools wie `residential_common`, `police_ammo`, `military_weapons`, `hospital_medical` und `industrial_tools`
-- Zombies mit Wandern, Sicht, Geräuschreaktion, Verfolgung, Suche und Nahkampfangriff
+- Zonenbasierte Zombiespawns: Wohngebiet, Markt, Polizei, Klinik, Industrie, Militär, Wald und Straßen
+- Zombies mit Idle, Wandern, Sicht, Geräuschreaktion, Verfolgung, Suche und Nahkampfangriff
 - Waffen-Grundsystem mit Nahkampf, Pistole, Gewehr, Munition, Magazinen, Nachladen, Feuerrate und Geräuschradius
-- HUD, Interaktionsanzeige und Inventar-Overlay
-- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, ausgerüstete Items und Magazine
+- Einfaches Tag-Nacht-System mit veränderter Lichtfarbe, Helligkeit und Sichtweite
+- Einfaches Wetter-System mit klar, bewölkt, Regen und Nebel inklusive Fog-/Regen-Platzhaltereffekten
+- Eigenständige Platzhalter-Soundstruktur für Schritte, Sprinten, Zombies, Schüsse, Nachladen, Loot, Konsum und Verletzung
+- HUD, Warnmeldungen, Interaktionsanzeige, Schadens-Flash und Inventar-Overlay
+- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, ausgerüstete Items, Magazine, geplünderte Lootspots, Tageszeit und Wetter
+- Zentrale Balancing-Datei: `src/game/Balance.ts`
 
 ## Design-Regel
 
