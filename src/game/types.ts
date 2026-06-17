@@ -14,6 +14,9 @@ export type BuildingType = 'house' | 'market' | 'police' | 'military' | 'hospita
 export type ZoneType = 'residential' | 'market' | 'police' | 'hospital' | 'industrial' | 'military' | 'forest' | 'road';
 export type WeaponKind = 'melee' | 'ranged';
 export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'fog';
+export type ItemCondition = 'new' | 'good' | 'worn' | 'damaged' | 'badly_damaged' | 'ruined';
+export type FoodFreshness = 'fresh' | 'old' | 'spoiled';
+export type ClothingSlot = 'head' | 'torso' | 'legs' | 'feet' | 'hands' | 'vest' | 'backpack';
 
 export interface WeaponDefinition {
   kind: WeaponKind;
@@ -21,6 +24,8 @@ export interface WeaponDefinition {
   range: number;
   noiseRadius: number;
   fireRate: number;
+  recoil?: number;
+  malfunctionBaseChance?: number;
   ammoType?: string;
   magazineSize?: number;
   reloadTime?: number;
@@ -31,15 +36,26 @@ export interface ItemDefinition {
   name: string;
   type: ItemType;
   size: number;
+  weight: number;
   maxStack: number;
   description: string;
   nutrition?: number;
   hydration?: number;
+  dirtyWaterRisk?: number;
+  spoiledFoodRisk?: number;
   heal?: number;
+  painRelief?: number;
   infectionRelief?: number;
+  illnessRelief?: number;
+  disinfect?: number;
   stopsBleeding?: boolean;
+  infectionRisk?: number;
   capacityBonus?: number;
   armor?: number;
+  warmth?: number;
+  rainProtection?: number;
+  clothingSlot?: ClothingSlot;
+  repairTags?: Array<'cloth' | 'leather' | 'tool' | 'weapon' | 'backpack'>;
   weapon?: WeaponDefinition;
 }
 
@@ -49,9 +65,15 @@ export interface InventoryEntry {
   type: ItemType;
   count: number;
   size: number;
+  weight: number;
+  totalWeight: number;
+  condition: ItemCondition;
+  conditionLabel: string;
+  freshness?: FoodFreshness;
   equipped: boolean;
   canUse: boolean;
   canEquip: boolean;
+  description: string;
 }
 
 export interface InventorySaveData {
@@ -59,6 +81,9 @@ export interface InventorySaveData {
   equippedWeaponId: string | null;
   equippedArmorId: string | null;
   equippedBackpackId: string | null;
+  itemDurability?: Record<string, number>;
+  itemFreshness?: Record<string, FoodFreshness>;
+  clothingSlots?: Partial<Record<ClothingSlot, string | null>>;
 }
 
 export interface PlayerVitals {
@@ -69,6 +94,22 @@ export interface PlayerVitals {
   bleeding: boolean;
   infection: number;
   infected: boolean;
+  bodyTemperature: number;
+  wetness: number;
+  cold: number;
+  illness: number;
+  sick: boolean;
+  pain: number;
+  unconscious: boolean;
+  fracture: boolean;
+}
+
+export interface CraftingRecipeView {
+  id: string;
+  name: string;
+  available: boolean;
+  timeSeconds: number;
+  missing: string[];
 }
 
 export interface HudState {
@@ -79,23 +120,41 @@ export interface HudState {
   bleeding: boolean;
   infection: number;
   infected: boolean;
+  bodyTemperature: number;
+  wetness: number;
+  cold: number;
+  illness: number;
+  sick: boolean;
+  pain: number;
+  unconscious: boolean;
+  fracture: boolean;
   capacity: number;
   usedSlots: number;
+  totalWeight: number;
   armor: number;
+  warmth: number;
+  rainProtection: number;
   weapon: string;
+  weaponCondition: string;
   ammo: number;
   ammoText: string;
   currentBackpack: string;
   currentArmor: string;
+  clothing: Record<ClothingSlot, string>;
   zombiesAlerted: number;
   interactionPrompt: string;
   message: string;
   warning: string;
   inventoryOpen: boolean;
+  craftingOpen: boolean;
+  craftingRecipes: CraftingRecipeView[];
   inventory: InventoryEntry[];
   timeText: string;
   weather: WeatherType;
   noiseLevel: string;
+  actionLabel: string;
+  actionProgress: number;
+  nearbyFireWarmth: number;
   damageFlash: number;
 }
 
@@ -134,6 +193,13 @@ export interface SpawnZoneDefinition {
   spawnChance: number;
 }
 
+export interface CampfireSaveData {
+  id: string;
+  position: { x: number; y: number; z: number };
+  burnTimeRemaining: number;
+  lit: boolean;
+}
+
 export interface SaveGameState {
   version: 1;
   savedAt: number;
@@ -148,4 +214,5 @@ export interface SaveGameState {
   lootSpots: LootSpotSaveData[];
   timeOfDay: number;
   weather: WeatherType;
+  campfires?: CampfireSaveData[];
 }

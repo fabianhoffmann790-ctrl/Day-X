@@ -27,13 +27,17 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Space: Springen
 - E: Item im Lootspot aufnehmen, wenn du direkt darauf schaust
 - Tab: Inventar ein-/ausblenden
+- K: Crafting-Menü öffnen/schließen
+- 4-9 und 0: sichtbare Crafting-Rezepte ausführen, wenn Crafting geöffnet ist
 - R: Ausgerüstete Schusswaffe nachladen
 - 1/2/3: Waffe wechseln, wenn vorhanden
 - V: beste Rüstung/Kleidung ausrüsten
 - B: besten Rucksack ausrüsten
-- F: beste Nahrung verwenden
-- G: bestes Getränk verwenden
+- F: beste Nahrung essen
+- G: bestes Getränk trinken
 - H: Medizin verwenden
+- T: beschädigtes ausgerüstetes Item reparieren
+- Y: Lagerfeuer platzieren und anzünden
 - F6: Spielstand speichern
 - F9: Spielstand laden
 - F10: Debug-Lootrespawn
@@ -45,19 +49,30 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Größere Open-World-Platzhalterkarte mit Siedlung, Straßen, Waldstücken, Feldern, Fahrzeugwracks, Zäunen, Klinik, Polizei, Supermarkt, Werkstatt/Lagerhalle und Militär-Checkpoint
 - Betretbare Platzhalter-Gebäude mit dunkleren Innenbereichen, Eingängen und passenden Lootspots
 - First-Person-Controller mit Pointer Lock
-- HP, Ausdauer, Hunger, Durst, Blutung und vorbereitetem Infektionsstatus
-- Inventar mit begrenzten Slots, ausrüstbaren Waffen, Rüstung/Kleidung und Rucksäcken
-- Rucksäcke erhöhen die Kapazität, Rüstung reduziert Schaden
+- HP, Ausdauer, Hunger, Durst, Blutung, Infektion, Krankheit, Schmerz, Nässe, Kälte und Körpertemperatur
+- Bewusstlosigkeit und Knochenbruch sind als Statuswerte vorbereitet
+- Kleidungssystem mit Slots: Kopf, Oberkörper, Beine, Schuhe, Hände, Weste/Rüstung und Rucksack
+- Kleidung beeinflusst Schadenreduktion, Wärme, Regenschutz, Kapazität und Gewicht
+- Items haben Zustand: neu, gut, abgenutzt, beschädigt, stark beschädigt, ruiniert
+- Beschädigte Kleidung, Rucksäcke und Waffen wirken schlechter; ruinierte Items können nicht benutzt/ausgerüstet werden
+- Reparatursystem mit Nähset, Klebeband, Werkzeugkasten und Waffenreinigungsset
+- Crafting-System mit Lumpen, improvisiertem Verband, Fackel, Lagerfeuer-Set, improvisiertem Rucksack, Holzspeer und abgekochtem Wasser als vorbereiteter Mechanik
+- Lagerfeuer kann platziert werden, brennt begrenzt, erzeugt Licht und wärmt den Spieler
+- Nahrung und Wasser können krank machen, wenn sie verdorben oder schmutzig sind
+- Medizin behandelt Blutung, Schmerz, Infektion und Krankheit
+- Waffen haben Magazine, Munitionstypen, Zustand und einfache Ladehemmungswahrscheinlichkeit
+- Nahkampf verbraucht Ausdauer und beschädigt die Waffe
+- Gewicht beeinflusst Ausdauerverbrauch, Regeneration und Sprintfähigkeit
+- Zeitbasierte Aktionen mit Fortschrittsbalken für Essen, Trinken, Medizin, Nachladen, Reparatur, Crafting und Feuer
+- Aktionen brechen ab, wenn der Spieler sich zu weit bewegt oder getroffen wird
 - Lootspots mit Spawn-Chance, maximal einem Item, geplündertem Zustand und vorbereitetem Respawn-Zeitpunkt
-- Itempools wie `residential_common`, `police_ammo`, `military_weapons`, `hospital_medical` und `industrial_tools`
 - Zonenbasierte Zombiespawns: Wohngebiet, Markt, Polizei, Klinik, Industrie, Militär, Wald und Straßen
 - Zombies mit Idle, Wandern, Sicht, Geräuschreaktion, Verfolgung, Suche und Nahkampfangriff
-- Waffen-Grundsystem mit Nahkampf, Pistole, Gewehr, Munition, Magazinen, Nachladen, Feuerrate und Geräuschradius
 - Einfaches Tag-Nacht-System mit veränderter Lichtfarbe, Helligkeit und Sichtweite
 - Einfaches Wetter-System mit klar, bewölkt, Regen und Nebel inklusive Fog-/Regen-Platzhaltereffekten
 - Eigenständige Platzhalter-Soundstruktur für Schritte, Sprinten, Zombies, Schüsse, Nachladen, Loot, Konsum und Verletzung
-- HUD, Warnmeldungen, Interaktionsanzeige, Schadens-Flash und Inventar-Overlay
-- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, ausgerüstete Items, Magazine, geplünderte Lootspots, Tageszeit und Wetter
+- HUD, Statuswarnungen, Interaktionsanzeige, Schadens-Flash, Inventar-Overlay und Crafting-Overlay
+- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, Item-Zustände, Kleidungsslots, Magazine, geplünderte Lootspots, Tageszeit, Wetter und Lagerfeuer
 - Zentrale Balancing-Datei: `src/game/Balance.ts`
 
 ## Design-Regel

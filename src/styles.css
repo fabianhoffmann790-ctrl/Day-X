@@ -47,7 +47,7 @@ h1 { margin: 0 0 14px; font-size: clamp(46px, 8vw, 96px); line-height: 0.9; }
   position: fixed;
   left: 18px;
   top: 18px;
-  width: 455px;
+  width: 520px;
   max-width: calc(100vw - 36px);
   padding: 14px;
   background: rgba(5, 8, 6, 0.78);
@@ -56,7 +56,7 @@ h1 { margin: 0 0 14px; font-size: clamp(46px, 8vw, 96px); line-height: 0.9; }
   pointer-events: none;
 }
 .meta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; color: #aeb8aa; font-size: 12px; }
-.stat { display: grid; grid-template-columns: 86px 1fr 34px; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.stat { display: grid; grid-template-columns: 86px 1fr 48px; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
 .stat b { text-align: right; color: #e7ebdf; font-size: 12px; }
 meter { width: 100%; height: 14px; }
 .quick-row { display: flex; gap: 12px; flex-wrap: wrap; color: #cbd3c6; font-size: 12px; margin-top: 8px; }
@@ -69,7 +69,7 @@ meter { width: 100%; height: 14px; }
   color: #ffd1c5;
   font-size: 13px;
 }
-.interaction {
+.interaction, .action-box {
   margin: 12px 0 0;
   padding: 8px 10px;
   border: 1px solid rgba(240, 228, 176, 0.35);
@@ -77,25 +77,37 @@ meter { width: 100%; height: 14px; }
   color: #f1e4b0;
   font-size: 13px;
 }
+.action-box { display: grid; gap: 6px; }
+.action-box progress { width: 100%; height: 10px; }
 .message { min-height: 22px; margin: 10px 0 0; color: #f1e4b0; font-size: 13px; }
-.inventory {
+.inventory, .crafting-panel {
   position: fixed;
   right: 18px;
   top: 18px;
-  width: 410px;
+  width: 440px;
   max-height: calc(100vh - 36px);
   overflow: auto;
   padding: 18px;
   background: rgba(8, 10, 9, 0.92);
   border: 1px solid rgba(255,255,255,0.15);
 }
-.inventory h2 { margin-top: 0; }
+.crafting-panel { right: 474px; width: 360px; }
+.inventory h2, .crafting-panel h2 { margin-top: 0; }
 .inventory-help { color: #aeb8aa; font-size: 12px; line-height: 1.5; }
+.equipment-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+.equipment-grid div { padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); display: grid; gap: 3px; }
+.equipment-grid strong { font-size: 12px; }
+.equipment-grid span { color: #cbd3c6; font-size: 12px; }
 .inventory ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .inventory li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
 .inventory li.equipped { border-color: rgba(240, 228, 176, 0.45); background: rgba(240, 228, 176, 0.08); }
 .inventory li div { display: grid; gap: 3px; }
 .inventory li small { color: #aeb8aa; }
+.crafting-panel ol { margin: 0; padding-left: 28px; display: grid; gap: 8px; }
+.crafting-panel li { padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
+.crafting-panel li.available { border-color: rgba(180, 220, 160, 0.35); }
+.crafting-panel li.missing { opacity: 0.68; }
+.crafting-panel small { display: block; color: #aeb8aa; margin-top: 3px; }
 .crosshair {
   position: fixed;
   left: 50%;
