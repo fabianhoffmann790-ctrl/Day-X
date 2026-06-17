@@ -1,16 +1,19 @@
 import * as THREE from 'three';
-import { BUILDING_LOOT } from './data';
+import { BUILDING_LOOT, ITEMS } from './data';
 import { Inventory } from './Inventory';
 import { LootSystem } from './LootSystem';
+import { applyDamage, applyItemEffects, cloneDefaultVitals, updatePlayerVitals } from './PlayerStats';
+import { SaveSystem } from './SaveSystem';
 import { Zombie } from './Zombie';
-import type { BuildingType, HudState, LootSpotDefinition } from './types';
+import type { BuildingType, HudState, LootSpotDefinition, PlayerVitals, SpawnedLoot } from './types';
 
 type KeyMap = Record<string, boolean>;
 
 interface LootSpot {
   mesh: THREE.Mesh;
   definition: LootSpotDefinition;
-  searched: boolean;
+  spawnedLoot: SpawnedLoot | null;
+  taken: boolean;
 }
 
 export class GameEngine {
@@ -23,16 +26,22 @@ export class GameEngine {
   private inventory = new Inventory();
   private loot = new LootSystem();
   private clock = new THREE.Clock();
+  private raycaster = new THREE.Raycaster();
   private animationId = 0;
   private yaw = 0;
   private pitch = 0;
   private verticalVelocity = 0;
   private grounded = true;
-  private noise = 0;
-  private message = 'Suche Häuser ab. Ressourcen sind knapp.';
+  private noiseRadius = 0;
+  private message = 'Suche Gebäude ab. Schleichen ist oft sicherer als Kämpfen.';
+  private interactionPrompt = '';
   private inventoryOpen = false;
-  private stats = { hp: 100, stamina: 100, hunger: 86, thirst: 82, bleeding: false };
+  private stats: PlayerVitals = cloneDefaultVitals();
   private lastPrimaryAttack = 0;
+  private reloadTimer = 0;
+  private autoSaveTimer = 0;
+  private hoveredLoot: LootSpot | null = null;
+  private magazineAmmo = new Map<string, number>();
   private scratchVector = new THREE.Vector3();
 
   constructor(private canvas: HTMLCanvasElement, private onHudChange: (state: HudState) => void) {
@@ -42,6 +51,7 @@ export class GameEngine {
     this.camera.position.set(0, 1.75, 8);
     this.camera.rotation.order = 'YXZ';
     this.setupScene();
+    this.loadGame(false);
     this.bindEvents();
     this.emitHud();
     this.loop();
@@ -49,6 +59,7 @@ export class GameEngine {
 
   dispose() {
     cancelAnimationFrame(this.animationId);
+    this.canvas.removeEventListener('click', this.onCanvasClick);
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
@@ -62,9 +73,9 @@ export class GameEngine {
 
   private setupScene() {
     this.scene.background = new THREE.Color(0x111611);
-    this.scene.fog = new THREE.Fog(0x111611, 20, 95);
-    this.scene.add(new THREE.HemisphereLight(0xaab0a0, 0x0b0f0b, 1.3));
-    const sun = new THREE.DirectionalLight(0xf1e6c8, 1.5);
+    this.scene.fog = new THREE.Fog(0x111611, 18, 92);
+    this.scene.add(new THREE.HemisphereLight(0xaab0a0, 0x0b0f0b, 1.25));
+    const sun = new THREE.DirectionalLight(0xf1e6c8, 1.45);
     sun.position.set(18, 28, 10);
     this.scene.add(sun);
 
@@ -83,8 +94,8 @@ export class GameEngine {
     this.addBuilding('workshop', 2, 17, 10, 7, 0x534734);
     this.addBuilding('military', 35, -3, 13, 10, 0x31432e);
 
-    for (let i = 0; i < 15; i += 1) {
-      const zombie = new Zombie(new THREE.Vector3((Math.random() - 0.5) * 82, 0, (Math.random() - 0.5) * 82));
+    for (let i = 0; i < 18; i += 1) {
+      const zombie = new Zombie(new THREE.Vector3((Math.random() - 0.5) * 86, 0, (Math.random() - 0.5) * 86));
       this.zombies.push(zombie);
       this.scene.add(zombie.mesh);
     }
@@ -92,10 +103,8 @@ export class GameEngine {
 
   private addBuilding(type: BuildingType, x: number, z: number, width: number, depth: number, color: number) {
     const height = type === 'military' ? 4.4 : 3.4;
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
-    );
+    const material = new THREE.MeshStandardMaterial({ color, roughness: 0.9, transparent: true, opacity: 0.55 });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
     mesh.position.set(x, height / 2, z);
     this.scene.add(mesh);
 
@@ -108,26 +117,46 @@ export class GameEngine {
 
     const spots = BUILDING_LOOT[type];
     spots.forEach((definition, index) => {
+      const spawnedLoot = this.loot.spawn(definition);
       const spot = new THREE.Mesh(
-        new THREE.BoxGeometry(0.75, 0.28, 0.75),
-        new THREE.MeshStandardMaterial({ color: 0xb7a66f, roughness: 0.7 })
+        new THREE.BoxGeometry(0.72, 0.28, 0.72),
+        new THREE.MeshStandardMaterial({ color: this.colorForLoot(spawnedLoot?.itemId), roughness: 0.7 })
       );
-      const offsetX = -width / 2 + 1.5 + (index % 3) * 2.2;
-      const offsetZ = depth / 2 + 1.4;
+      const columns = Math.min(3, spots.length);
+      const offsetX = -width / 2 + 1.4 + (index % columns) * 2.15;
+      const offsetZ = -depth / 2 + 1.35 + Math.floor(index / columns) * 2.15;
       spot.position.set(x + offsetX, 0.14, z + offsetZ);
+      spot.visible = Boolean(spawnedLoot);
+      spot.userData.label = definition.label;
       this.scene.add(spot);
-      this.lootSpots.push({ mesh: spot, definition, searched: false });
+      this.lootSpots.push({ mesh: spot, definition, spawnedLoot, taken: false });
     });
   }
 
+  private colorForLoot(itemId?: string) {
+    if (!itemId) return 0x2f332d;
+    const item = ITEMS[itemId];
+    if (!item) return 0xb7a66f;
+    if (item.type === 'food' || item.type === 'drink') return 0xc0aa6d;
+    if (item.type === 'medical') return 0xd6d8d4;
+    if (item.type === 'ammo' || item.type === 'ranged_weapon') return 0x8a7d5b;
+    if (item.type === 'armor' || item.type === 'clothing') return 0x6f7780;
+    if (item.type === 'backpack') return 0x6c5b3e;
+    return 0x9c8b65;
+  }
+
   private bindEvents() {
-    this.canvas.addEventListener('click', () => this.canvas.requestPointerLock());
+    this.canvas.addEventListener('click', this.onCanvasClick);
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('mousedown', this.onMouseDown);
   }
+
+  private onCanvasClick = () => {
+    this.canvas.requestPointerLock();
+  };
 
   private onResize = () => {
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -142,14 +171,17 @@ export class GameEngine {
       this.inventoryOpen = !this.inventoryOpen;
       this.emitHud();
     }
-    if (event.code === 'KeyE') this.searchNearbyLoot();
-    if (event.code === 'Digit1') this.inventory.cycleWeapon(0);
-    if (event.code === 'Digit2') this.inventory.cycleWeapon(1);
-    if (event.code === 'Digit3') this.inventory.cycleWeapon(2);
-    if (event.code === 'KeyR') this.message = `Munition geprüft: ${this.inventory.ammoForEquippedWeapon()} Schuss verfügbar.`;
+    if (event.code === 'KeyE') this.interact();
+    if (event.code === 'Digit1') this.equipWeaponSlot(0);
+    if (event.code === 'Digit2') this.equipWeaponSlot(1);
+    if (event.code === 'Digit3') this.equipWeaponSlot(2);
+    if (event.code === 'KeyR') this.reloadEquippedWeapon();
     if (event.code === 'KeyF') this.consumeFood();
     if (event.code === 'KeyG') this.consumeDrink();
     if (event.code === 'KeyH') this.useMedical();
+    if (event.code === 'F6') this.saveGame(true);
+    if (event.code === 'F9') this.loadGame(true);
+    if (event.code === 'KeyX') this.message = 'Drop-System vorbereitet: Items bleiben aktuell noch im Inventar.';
   };
 
   private onKeyUp = (event: KeyboardEvent) => {
@@ -178,13 +210,29 @@ export class GameEngine {
 
   private update(delta: number) {
     this.updateMovement(delta);
-    this.updateSurvival(delta);
+    updatePlayerVitals(this.stats, delta);
+    this.updateReload(delta);
+    this.updateInteractionPrompt();
+
     let alerted = 0;
     for (const zombie of this.zombies) {
-      zombie.update(delta, this.camera.position, this.noise, (damage) => this.takeDamage(damage));
+      zombie.update(delta, {
+        playerPosition: this.camera.position,
+        noiseOrigin: this.camera.position,
+        noiseRadius: this.noiseRadius,
+        onAttack: (damage, bleedChance) => this.takeDamage(damage, bleedChance)
+      });
       if (zombie.alive && zombie.alerted) alerted += 1;
     }
-    this.noise = Math.max(0, this.noise - delta * 1.6);
+
+    this.noiseRadius = Math.max(0, this.noiseRadius - delta * 24);
+    this.autoSaveTimer += delta;
+    if (this.autoSaveTimer > 20) {
+      this.autoSaveTimer = 0;
+      this.saveGame(false);
+    }
+
+    if (this.stats.hp <= 0) this.message = 'Du bist gestorben. Reload im Browser startet den Prototyp neu.';
     this.emitHud(alerted);
   }
 
@@ -194,7 +242,7 @@ export class GameEngine {
     const moving = forward !== 0 || strafe !== 0;
     const sneaking = this.pressed('ControlLeft') || this.pressed('ControlRight') || this.pressed('KeyC');
     const sprinting = this.pressed('ShiftLeft') && moving && !sneaking && this.stats.stamina > 4;
-    const speed = sneaking ? 1.45 : sprinting ? 6.0 : 3.25;
+    const speed = sneaking ? 1.35 : sprinting ? 5.7 : 3.05;
 
     const direction = this.scratchVector.set(strafe, 0, -forward);
     if (direction.lengthSq() > 0) {
@@ -209,7 +257,9 @@ export class GameEngine {
       this.verticalVelocity = 5;
       this.grounded = false;
       this.stats.stamina -= 8;
+      this.noiseRadius = Math.max(this.noiseRadius, 12);
     }
+
     this.verticalVelocity -= 12 * delta;
     this.camera.position.y += this.verticalVelocity * delta;
     if (this.camera.position.y <= 1.75) {
@@ -220,119 +270,238 @@ export class GameEngine {
     this.camera.position.x = THREE.MathUtils.clamp(this.camera.position.x, -66, 66);
     this.camera.position.z = THREE.MathUtils.clamp(this.camera.position.z, -66, 66);
 
-    if (moving) this.noise = Math.max(this.noise, sneaking ? 0.08 : sprinting ? 0.72 : 0.26);
+    if (moving) this.noiseRadius = Math.max(this.noiseRadius, sneaking ? 2.4 : sprinting ? 18 : 7);
   }
 
-  private updateSurvival(delta: number) {
-    this.stats.hunger = Math.max(0, this.stats.hunger - delta * 0.45);
-    this.stats.thirst = Math.max(0, this.stats.thirst - delta * 0.62);
-    if (this.stats.bleeding) this.stats.hp = Math.max(0, this.stats.hp - delta * 1.1);
-    if (this.stats.hunger <= 0 || this.stats.thirst <= 0) this.stats.hp = Math.max(0, this.stats.hp - delta * 1.6);
-    if (this.stats.hp <= 0) this.message = 'Du bist gestorben. Reload im Browser startet den Prototyp neu.';
+  private updateReload(delta: number) {
+    this.reloadTimer = Math.max(0, this.reloadTimer - delta);
   }
 
-  private searchNearbyLoot() {
-    const nearest = this.lootSpots
-      .filter((spot) => !spot.searched)
-      .sort((a, b) => a.mesh.position.distanceTo(this.camera.position) - b.mesh.position.distanceTo(this.camera.position))[0];
-    if (!nearest || nearest.mesh.position.distanceTo(this.camera.position) > 3) {
-      this.message = 'Kein durchsuchbarer Lootspot in Reichweite.';
+  private updateInteractionPrompt() {
+    this.hoveredLoot = null;
+    this.interactionPrompt = '';
+    const visibleLoot = this.lootSpots.filter((spot) => !spot.taken && spot.spawnedLoot && spot.mesh.visible);
+    if (visibleLoot.length === 0) return;
+
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const hits = this.raycaster.intersectObjects(visibleLoot.map((spot) => spot.mesh), false);
+    const hit = hits.find((candidate) => candidate.distance <= 3.2);
+    if (!hit) return;
+
+    const spot = visibleLoot.find((candidate) => candidate.mesh === hit.object) ?? null;
+    if (!spot?.spawnedLoot) return;
+    const item = ITEMS[spot.spawnedLoot.itemId];
+    this.hoveredLoot = spot;
+    this.interactionPrompt = `[E] ${item?.name ?? 'Item'} aufnehmen (${spot.definition.label})`;
+  }
+
+  private interact() {
+    const target = this.hoveredLoot ?? this.findNearestReachableLoot();
+    if (!target?.spawnedLoot) {
+      this.message = 'Nichts in Interaktionsreichweite. Schau direkt auf Loot und drücke E.';
       return;
     }
-    nearest.searched = true;
-    nearest.mesh.visible = false;
-    const item = this.loot.roll(nearest.definition.pool, nearest.definition.chance);
-    if (!item) {
-      this.message = 'Du findest nichts Brauchbares.';
+
+    const item = ITEMS[target.spawnedLoot.itemId];
+    if (!item) return;
+    const amount = target.spawnedLoot.count;
+    if (!this.inventory.add(item.id, amount)) {
+      this.message = `Kein Platz für ${item.name}. Rucksack finden oder später Drop-System nutzen.`;
       return;
     }
-    const amount = item.type === 'ammo' ? 3 + Math.floor(Math.random() * 5) : 1;
-    if (this.inventory.add(item.id, amount)) this.message = `Gefunden: ${item.name}${amount > 1 ? ` x${amount}` : ''}.`;
-    else this.message = `Kein Platz für ${item.name}. Suche einen Rucksack.`;
+
+    target.taken = true;
+    target.mesh.visible = false;
+    target.spawnedLoot = null;
+    this.message = `Aufgenommen: ${item.name}${amount > 1 ? ` x${amount}` : ''}.`;
+    this.updateInteractionPrompt();
+  }
+
+  private findNearestReachableLoot() {
+    return this.lootSpots
+      .filter((spot) => !spot.taken && spot.spawnedLoot && spot.mesh.visible && spot.mesh.position.distanceTo(this.camera.position) <= 2.3)
+      .sort((a, b) => a.mesh.position.distanceTo(this.camera.position) - b.mesh.position.distanceTo(this.camera.position))[0] ?? null;
+  }
+
+  private equipWeaponSlot(index: number) {
+    this.inventory.cycleWeapon(index);
+    const weapon = this.inventory.equippedWeapon();
+    this.message = weapon ? `Ausgerüstet: ${weapon.name}.` : 'Keine Waffe in diesem Slot.';
   }
 
   private primaryAttack() {
-    const now = performance.now();
-    if (now - this.lastPrimaryAttack < 480) return;
-    this.lastPrimaryAttack = now;
+    if (this.stats.hp <= 0) return;
     const weapon = this.inventory.equippedWeapon();
-    const weaponData = weapon?.weapon ?? { kind: 'melee' as const, damage: 12, range: 1.7, noise: 0.15 };
+    const weaponData = weapon?.weapon ?? { kind: 'melee' as const, damage: 12, range: 1.7, noiseRadius: 3, fireRate: 62 };
+    const now = performance.now();
+    const cooldownMs = 60000 / weaponData.fireRate;
+    if (now - this.lastPrimaryAttack < cooldownMs) return;
+    if (this.reloadTimer > 0) {
+      this.message = 'Du lädst gerade nach.';
+      return;
+    }
+    this.lastPrimaryAttack = now;
+
     if (weaponData.kind === 'ranged') {
-      const ammoType = weaponData.ammoType;
-      if (!ammoType || !this.inventory.remove(ammoType, 1)) {
-        this.message = 'Klick. Keine passende Munition.';
+      if (!weapon) return;
+      const loaded = this.magazineAmmo.get(weapon.id) ?? 0;
+      if (loaded <= 0) {
+        this.message = 'Magazin leer. Drücke R zum Nachladen.';
         return;
       }
-      this.noise = Math.max(this.noise, weaponData.noise);
-      this.message = `${weapon?.name ?? 'Waffe'} abgefeuert. Munition ist wertvoll.`;
+      this.magazineAmmo.set(weapon.id, loaded - 1);
+      this.noiseRadius = Math.max(this.noiseRadius, weaponData.noiseRadius);
+      this.message = `${weapon.name} abgefeuert. Der Schuss war laut.`;
     } else {
-      this.noise = Math.max(this.noise, weaponData.noise);
+      this.stats.stamina = Math.max(0, this.stats.stamina - 6);
+      this.noiseRadius = Math.max(this.noiseRadius, weaponData.noiseRadius);
     }
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const hit = this.findZombieInCrosshair(weaponData.range);
+    if (hit) {
+      hit.damage(weaponData.damage);
+      this.message = hit.alive ? 'Treffer. Der Zombie bleibt gefährlich.' : 'Zombie ausgeschaltet.';
+    } else if (weaponData.kind === 'melee') {
+      this.message = 'Du triffst ins Leere.';
+    }
+  }
+
+  private findZombieInCrosshair(range: number) {
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     let best: Zombie | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     for (const zombie of this.zombies) {
       if (!zombie.alive) continue;
       const distance = zombie.mesh.position.distanceTo(this.camera.position);
-      if (distance > weaponData.range) continue;
+      if (distance > range) continue;
       const toZombie = zombie.mesh.position.clone().sub(this.camera.position).normalize();
-      const facing = raycaster.ray.direction.dot(toZombie);
+      const facing = this.raycaster.ray.direction.dot(toZombie);
       if (facing > 0.94 && distance < bestDistance) {
         best = zombie;
         bestDistance = distance;
       }
     }
-    if (best) {
-      best.damage(weaponData.damage);
-      this.message = best.alive ? 'Treffer. Der Zombie kommt weiter.' : 'Zombie ausgeschaltet.';
-    } else if (weaponData.kind === 'melee') this.message = 'Du triffst ins Leere.';
+    return best;
   }
 
-  private takeDamage(rawDamage: number) {
-    const mitigated = rawDamage * (1 - this.inventory.armor);
-    this.stats.hp = Math.max(0, this.stats.hp - mitigated);
-    if (Math.random() > 0.72) this.stats.bleeding = true;
-    this.message = this.stats.bleeding ? 'Zombieangriff! Du blutest.' : 'Zombieangriff! Abstand gewinnen.';
+  private reloadEquippedWeapon() {
+    const weapon = this.inventory.equippedWeapon();
+    const data = weapon?.weapon;
+    if (!weapon || !data || data.kind !== 'ranged' || !data.ammoType || !data.magazineSize) {
+      this.message = 'Diese Waffe muss nicht nachgeladen werden.';
+      return;
+    }
+
+    const loaded = this.magazineAmmo.get(weapon.id) ?? 0;
+    const needed = data.magazineSize - loaded;
+    const reserve = this.inventory.count(data.ammoType);
+    if (needed <= 0) {
+      this.message = 'Magazin ist bereits voll.';
+      return;
+    }
+    if (reserve <= 0) {
+      this.message = `Keine passende Munition für ${weapon.name}.`;
+      return;
+    }
+
+    const amount = Math.min(needed, reserve);
+    this.inventory.consumeAmmo(data.ammoType, amount);
+    this.magazineAmmo.set(weapon.id, loaded + amount);
+    this.reloadTimer = data.reloadTime ?? 1;
+    this.message = `${weapon.name} nachgeladen: ${loaded + amount}/${data.magazineSize}.`;
+  }
+
+  private takeDamage(rawDamage: number, bleedChance: number) {
+    const result = applyDamage(this.stats, rawDamage, this.inventory.armor, bleedChance);
+    this.message = result.startedBleeding
+      ? `Zombieangriff! ${Math.round(result.damageTaken)} Schaden, du blutest.`
+      : `Zombieangriff! ${Math.round(result.damageTaken)} Schaden. Abstand gewinnen.`;
   }
 
   private consumeFood() {
     const item = this.inventory.useBestFood();
-    if (!item) return;
-    this.stats.hunger = Math.min(100, this.stats.hunger + (item.nutrition ?? 0));
-    this.message = `${item.name} gegessen.`;
+    if (!item) {
+      this.message = 'Keine Nahrung im Inventar.';
+      return;
+    }
+    applyItemEffects(this.stats, item);
+    this.message = `${item.name} gegessen. Hunger steigt.`;
   }
 
   private consumeDrink() {
     const item = this.inventory.useBestDrink();
-    if (!item) return;
-    this.stats.thirst = Math.min(100, this.stats.thirst + (item.hydration ?? 0));
-    this.message = `${item.name} getrunken.`;
+    if (!item) {
+      this.message = 'Kein Getränk im Inventar.';
+      return;
+    }
+    applyItemEffects(this.stats, item);
+    this.message = `${item.name} getrunken. Durst steigt.`;
   }
 
   private useMedical() {
     const item = this.inventory.useMedical();
-    if (!item) return;
-    this.stats.hp = Math.min(100, this.stats.hp + (item.heal ?? 0));
-    if (item.stopsBleeding) this.stats.bleeding = false;
+    if (!item) {
+      this.message = 'Keine Medizin im Inventar.';
+      return;
+    }
+    applyItemEffects(this.stats, item);
     this.message = `${item.name} verwendet.`;
+  }
+
+  private saveGame(manual: boolean) {
+    const success = SaveSystem.save({
+      player: {
+        position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+        yaw: this.yaw,
+        pitch: this.pitch
+      },
+      stats: { ...this.stats },
+      inventory: this.inventory.toSaveData(),
+      magazines: Object.fromEntries(this.magazineAmmo.entries())
+    });
+    if (manual) this.message = success ? 'Spielstand gespeichert.' : 'Speichern fehlgeschlagen.';
+  }
+
+  private loadGame(manual: boolean) {
+    const save = SaveSystem.load();
+    if (!save) {
+      if (manual) this.message = 'Kein Spielstand gefunden.';
+      return;
+    }
+
+    this.camera.position.set(save.player.position.x, save.player.position.y, save.player.position.z);
+    this.yaw = save.player.yaw;
+    this.pitch = save.player.pitch;
+    this.camera.rotation.set(this.pitch, this.yaw, 0);
+    this.stats = { ...cloneDefaultVitals(), ...save.stats };
+    this.inventory.loadSaveData(save.inventory);
+    this.magazineAmmo = new Map(Object.entries(save.magazines ?? {}).map(([key, value]) => [key, Number(value)]));
+    this.message = manual ? 'Spielstand geladen.' : 'Lokaler Spielstand geladen.';
   }
 
   private emitHud(zombiesAlerted = 0) {
     const weapon = this.inventory.equippedWeapon();
+    const weaponData = weapon?.weapon;
+    const reserveAmmo = this.inventory.ammoForEquippedWeapon();
+    const loadedAmmo = weapon ? this.magazineAmmo.get(weapon.id) ?? 0 : 0;
+    const ammoText = weaponData?.kind === 'ranged' ? `${loadedAmmo}/${reserveAmmo}` : 'Nahkampf';
+
     this.onHudChange({
       hp: Math.round(this.stats.hp),
       stamina: Math.round(this.stats.stamina),
       hunger: Math.round(this.stats.hunger),
       thirst: Math.round(this.stats.thirst),
       bleeding: this.stats.bleeding,
+      infection: Math.round(this.stats.infection),
+      infected: this.stats.infected,
       capacity: this.inventory.capacity,
       usedSlots: this.inventory.usedSlots,
       armor: this.inventory.armor,
       weapon: weapon?.name ?? 'Fäuste',
-      ammo: this.inventory.ammoForEquippedWeapon(),
+      ammo: reserveAmmo,
+      ammoText,
       zombiesAlerted,
+      interactionPrompt: this.interactionPrompt,
       message: this.message,
       inventoryOpen: this.inventoryOpen,
       inventory: this.inventory.entries()
