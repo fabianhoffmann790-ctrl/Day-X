@@ -17,6 +17,11 @@ export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'fog';
 export type ItemCondition = 'new' | 'good' | 'worn' | 'damaged' | 'badly_damaged' | 'ruined';
 export type FoodFreshness = 'fresh' | 'old' | 'spoiled';
 export type ClothingSlot = 'head' | 'torso' | 'legs' | 'feet' | 'hands' | 'vest' | 'backpack';
+export type DoorKind = 'house' | 'interior' | 'metal' | 'police' | 'military';
+export type ContainerKind = 'cabinet' | 'fridge' | 'locker' | 'weapon_cabinet' | 'medical_cabinet' | 'toolbox' | 'military_crate' | 'vehicle_trunk' | 'trash' | 'ground_pack' | 'storage_box';
+export type VehicleKind = 'car' | 'police_car' | 'ambulance' | 'military_truck' | 'van';
+export type BuildableKind = 'wood_wall' | 'wood_gate' | 'barricade' | 'storage_box' | 'fence_segment' | 'sleeping_bag';
+export type DynamicEventKind = 'helicopter_crash' | 'military_convoy' | 'smoke_signal' | 'rare_crate' | 'building_alarm';
 
 export interface WeaponDefinition {
   kind: WeaponKind;
@@ -56,6 +61,7 @@ export interface ItemDefinition {
   rainProtection?: number;
   clothingSlot?: ClothingSlot;
   repairTags?: Array<'cloth' | 'leather' | 'tool' | 'weapon' | 'backpack'>;
+  accessKey?: string;
   weapon?: WeaponDefinition;
 }
 
@@ -156,6 +162,18 @@ export interface HudState {
   actionProgress: number;
   nearbyFireWarmth: number;
   damageFlash: number;
+  worldPrompt: string;
+  locationName: string;
+  eventHint: string;
+  compassHeading: string;
+  mapOpen: boolean;
+  buildMode: boolean;
+  selectedBuildable: string;
+  storageOpen: boolean;
+  storageTitle: string;
+  storageUsed: number;
+  storageCapacity: number;
+  storageItems: InventoryEntry[];
 }
 
 export interface LootPoolEntry {
@@ -171,43 +189,30 @@ export interface LootSpotDefinition {
   label: string;
 }
 
-export interface SpawnedLoot {
-  itemId: string;
-  count: number;
-}
+export interface SpawnedLoot { itemId: string; count: number; }
+export interface LootSpotSaveData { id: string; taken: boolean; itemId: string | null; count: number; respawnAt: number | null; }
+export interface SpawnZoneDefinition { id: string; type: ZoneType; position: { x: number; z: number }; radius: number; maxZombies: number; spawnChance: number; }
+export interface CampfireSaveData { id: string; position: { x: number; y: number; z: number }; burnTimeRemaining: number; lit: boolean; }
 
-export interface LootSpotSaveData {
-  id: string;
-  taken: boolean;
-  itemId: string | null;
-  count: number;
-  respawnAt: number | null;
-}
+export interface DoorSaveData { id: string; open: boolean; locked: boolean; breached: boolean; hp: number; }
+export interface ContainerSaveData { id: string; opened: boolean; searched: boolean; locked: boolean; items: Array<[string, number]>; }
+export interface PlacedObjectSaveData { id: string; kind: BuildableKind; position: { x: number; y: number; z: number }; yaw: number; hp: number; items?: Array<[string, number]>; }
+export interface DynamicEventSaveData { id: string; kind: DynamicEventKind; active: boolean; discovered: boolean; position: { x: number; z: number }; searched: boolean; timeRemaining: number; }
+export interface HordeSaveData { id: string; position: { x: number; z: number }; target: { x: number; z: number }; size: number; active: boolean; }
 
-export interface SpawnZoneDefinition {
-  id: string;
-  type: ZoneType;
-  position: { x: number; z: number };
-  radius: number;
-  maxZombies: number;
-  spawnChance: number;
-}
-
-export interface CampfireSaveData {
-  id: string;
-  position: { x: number; y: number; z: number };
-  burnTimeRemaining: number;
-  lit: boolean;
+export interface PersistentWorldSaveData {
+  doors: DoorSaveData[];
+  containers: ContainerSaveData[];
+  placedObjects: PlacedObjectSaveData[];
+  dynamicEvents: DynamicEventSaveData[];
+  hordes: HordeSaveData[];
+  discoveredHints: string[];
 }
 
 export interface SaveGameState {
   version: 1;
   savedAt: number;
-  player: {
-    position: { x: number; y: number; z: number };
-    yaw: number;
-    pitch: number;
-  };
+  player: { position: { x: number; y: number; z: number }; yaw: number; pitch: number };
   stats: PlayerVitals;
   inventory: InventorySaveData;
   magazines: Record<string, number>;
@@ -215,4 +220,5 @@ export interface SaveGameState {
   timeOfDay: number;
   weather: WeatherType;
   campfires?: CampfireSaveData[];
+  persistentWorld?: PersistentWorldSaveData;
 }

@@ -64,11 +64,15 @@ export const BALANCE = {
     attackRange: 1.55,
     attackCooldownSeconds: 1.25,
     loseSightSeconds: 4.5,
-    searchSeconds: 4
+    searchSeconds: 4,
+    respawnSeconds: 480,
+    barricadeDamage: 8
   },
   loot: {
     globalChanceMultiplier: 0.82,
     respawnDelaySeconds: 900,
+    containerRespawnSeconds: 3600,
+    highValueRespawnSeconds: 7200,
     debugRespawnKey: 'F10'
   },
   weapons: {
@@ -81,6 +85,65 @@ export const BALANCE = {
     conditionLossMelee: 1.6,
     conditionLossShot: 0.8,
     malfunctionConditionMultiplier: 0.28
+  },
+  access: {
+    houseBreakSeconds: 3,
+    interiorBreakSeconds: 2,
+    metalBreakSeconds: 6,
+    policeBreakSeconds: 7,
+    militaryBreakSeconds: 10,
+    doorBreakNoiseRadius: 32,
+    metalDoorNoiseRadius: 48,
+    lockpickSeconds: 4,
+    lockpickSuccessChance: 0.62,
+    lockpickBreakChance: 0.24,
+    keyNoiseRadius: 2,
+    containerSearchSeconds: 2.5,
+    lockedContainerBreakSeconds: 5,
+    containerBreakNoiseRadius: 22,
+    alarmDurationSeconds: 55,
+    alarmNoiseRadius: 82
+  },
+  storage: {
+    storageBoxCapacity: 34,
+    vehicleTrunkCapacity: 18,
+    groundPackCapacity: 12
+  },
+  building: {
+    woodWallHp: 180,
+    woodGateHp: 150,
+    barricadeHp: 95,
+    storageBoxHp: 120,
+    fenceSegmentHp: 115,
+    sleepingBagHp: 60,
+    placementDistance: 3.5,
+    buildSeconds: 4,
+    buildNoiseRadius: 12,
+    costs: {
+      wood_wall: { firewood: 3, nails: 2, hammer: 1 },
+      wood_gate: { firewood: 4, nails: 3, rope: 1, hammer: 1 },
+      barricade: { firewood: 2, nails: 1, hammer: 1 },
+      storage_box: { firewood: 2, nails: 2, hammer: 1 },
+      fence_segment: { firewood: 2, nails: 1, rope: 1, hammer: 1 },
+      sleeping_bag: { rag: 4, rope: 1 }
+    }
+  },
+  events: {
+    spawnCheckSeconds: 120,
+    spawnChance: 0.25,
+    maxActiveEvents: 2,
+    eventDurationSeconds: 900,
+    eventLootMultiplier: 1.3,
+    signalRadius: 80
+  },
+  horde: {
+    initialSize: 9,
+    maxHordes: 1,
+    spawnIntervalSeconds: 420,
+    hearingRadius: 115,
+    moveSpeed: 0.55,
+    nightSpeedBonus: 0.2,
+    wanderRadius: 140
   },
   repair: {
     sewingKitAmount: 34,
