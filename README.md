@@ -28,7 +28,7 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - E: Item im Lootspot aufnehmen, wenn du direkt darauf schaust
 - Tab: Inventar ein-/ausblenden
 - K: Crafting-Menü öffnen/schließen
-- 4-9: sichtbare Crafting-Rezepte ausführen, wenn Crafting geöffnet ist
+- 4-9 und 0: sichtbare Crafting-Rezepte ausführen, wenn Crafting geöffnet ist
 - R: Ausgerüstete Schusswaffe nachladen
 - 1/2/3: Waffe wechseln, wenn vorhanden
 - V: beste Rüstung/Kleidung ausrüsten
