@@ -1,11 +1,15 @@
 import * as THREE from 'three';
+import { BALANCE } from './Balance';
+import type { ZoneType, WeatherType } from './types';
 
-type ZombieState = 'wandering' | 'investigating' | 'chasing' | 'searching';
+type ZombieState = 'idle' | 'wandering' | 'investigating' | 'chasing' | 'searching';
 
 interface ZombieUpdateContext {
   playerPosition: THREE.Vector3;
   noiseOrigin: THREE.Vector3;
   noiseRadius: number;
+  isNight: boolean;
+  weather: WeatherType;
   onAttack: (damage: number, bleedChance: number) => void;
 }
 
@@ -13,9 +17,10 @@ export class Zombie {
   public mesh: THREE.Group;
   public hp = 76;
   public alerted = false;
-  public state: ZombieState = 'wandering';
+  public state: ZombieState = 'idle';
 
   private attackCooldown = 0;
+  private idleTimer = 1 + Math.random() * 3;
   private lostSightTimer = 0;
   private searchTimer = 0;
   private wanderTarget = new THREE.Vector3();
@@ -23,11 +28,11 @@ export class Zombie {
   private lastKnownPlayerPosition = new THREE.Vector3();
   private readonly spawnPoint = new THREE.Vector3();
 
-  constructor(position: THREE.Vector3) {
+  constructor(position: THREE.Vector3, private zoneType: ZoneType = 'road') {
     this.mesh = new THREE.Group();
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.35, 1.1, 4, 8),
-      new THREE.MeshStandardMaterial({ color: 0x556052, roughness: 1 })
+      new THREE.MeshStandardMaterial({ color: this.colorForZone(), roughness: 1 })
     );
     body.position.y = 0.95;
     const head = new THREE.Mesh(
@@ -58,10 +63,9 @@ export class Zombie {
     if (!this.alive) return;
 
     this.attackCooldown = Math.max(0, this.attackCooldown - delta);
-    const toPlayer = context.playerPosition.clone().sub(this.mesh.position);
-    const playerDistance = toPlayer.length();
-    const canSeePlayer = this.canSeePlayer(playerDistance);
-    const canHearPlayer = context.noiseRadius > 0 && this.mesh.position.distanceTo(context.noiseOrigin) <= context.noiseRadius;
+    const playerDistance = context.playerPosition.distanceTo(this.mesh.position);
+    const canSeePlayer = this.canSeePlayer(playerDistance, context.isNight, context.weather);
+    const canHearPlayer = context.noiseRadius > 0 && this.mesh.position.distanceTo(context.noiseOrigin) <= context.noiseRadius * BALANCE.zombie.hearingMultiplier;
 
     if (canSeePlayer) {
       this.alerted = true;
@@ -75,28 +79,43 @@ export class Zombie {
       this.lastKnownPlayerPosition.copy(context.noiseOrigin);
     } else if (this.state === 'chasing') {
       this.lostSightTimer += delta;
-      if (this.lostSightTimer > 4.5) {
+      if (this.lostSightTimer > BALANCE.zombie.loseSightSeconds) {
         this.state = 'searching';
-        this.searchTimer = 4;
+        this.searchTimer = BALANCE.zombie.searchSeconds;
       }
     }
 
+    if (this.state === 'idle') this.updateIdle(delta);
     if (this.state === 'wandering') this.updateWandering(delta);
-    if (this.state === 'investigating') this.moveTowards(this.investigationTarget, 1.45, delta, () => {
+    if (this.state === 'investigating') this.moveTowards(this.investigationTarget, BALANCE.zombie.investigateSpeed, delta, () => {
       this.state = 'searching';
-      this.searchTimer = 3.5;
+      this.searchTimer = BALANCE.zombie.searchSeconds;
     });
     if (this.state === 'searching') this.updateSearching(delta);
-    if (this.state === 'chasing') this.moveTowards(this.lastKnownPlayerPosition, 2.35, delta);
+    if (this.state === 'chasing') {
+      const nightBonus = context.isNight ? BALANCE.zombie.nightChaseSpeedBonus : 0;
+      this.moveTowards(this.lastKnownPlayerPosition, BALANCE.zombie.chaseSpeed + nightBonus, delta);
+    }
 
-    if (playerDistance < 1.55 && this.attackCooldown <= 0) {
-      this.attackCooldown = 1.25;
-      context.onAttack(19, 0.28);
+    if (playerDistance < BALANCE.zombie.attackRange && this.attackCooldown <= 0) {
+      this.attackCooldown = BALANCE.zombie.attackCooldownSeconds;
+      context.onAttack(BALANCE.zombie.baseDamage, BALANCE.zombie.bleedChance);
+    }
+  }
+
+  private updateIdle(delta: number) {
+    this.idleTimer -= delta;
+    if (this.idleTimer <= 0) {
+      this.state = 'wandering';
+      this.pickWanderTarget();
     }
   }
 
   private updateWandering(delta: number) {
-    this.moveTowards(this.wanderTarget, 0.62, delta, () => this.pickWanderTarget());
+    this.moveTowards(this.wanderTarget, BALANCE.zombie.wanderSpeed, delta, () => {
+      this.state = 'idle';
+      this.idleTimer = 1.5 + Math.random() * 4;
+    });
   }
 
   private updateSearching(delta: number) {
@@ -105,9 +124,9 @@ export class Zombie {
     this.moveTowards(jitterTarget, 1.05, delta);
     if (this.searchTimer <= 0) {
       this.alerted = false;
-      this.state = 'wandering';
+      this.state = 'idle';
       this.lostSightTimer = 0;
-      this.pickWanderTarget();
+      this.idleTimer = 1 + Math.random() * 3;
     }
   }
 
@@ -125,19 +144,28 @@ export class Zombie {
     this.mesh.lookAt(target.x, this.mesh.position.y, target.z);
   }
 
-  private canSeePlayer(distance: number) {
+  private canSeePlayer(distance: number, isNight: boolean, weather: WeatherType) {
     if (distance < 3) return true;
-    const sightRange = this.alerted ? 24 : 18;
-    return distance <= sightRange;
+    const weatherModifier = weather === 'fog' ? 0.48 : weather === 'rain' ? 0.72 : weather === 'cloudy' ? 0.9 : 1;
+    const baseRange = isNight ? BALANCE.zombie.nightSightRange : BALANCE.zombie.daySightRange;
+    const alertedBonus = this.alerted ? BALANCE.zombie.alertedSightBonus : 0;
+    return distance <= (baseRange + alertedBonus) * weatherModifier;
   }
 
   private pickWanderTarget() {
     const angle = Math.random() * Math.PI * 2;
-    const radius = 6 + Math.random() * 16;
+    const radius = 5 + Math.random() * (this.zoneType === 'forest' ? 24 : 16);
     this.wanderTarget.set(
       this.spawnPoint.x + Math.cos(angle) * radius,
       0,
       this.spawnPoint.z + Math.sin(angle) * radius
     );
+  }
+
+  private colorForZone() {
+    if (this.zoneType === 'military') return 0x4b5a48;
+    if (this.zoneType === 'hospital') return 0x6b706a;
+    if (this.zoneType === 'forest') return 0x44573e;
+    return 0x556052;
   }
 }
