@@ -1,6 +1,7 @@
-import type { InventorySaveData, PlayerVitals, SaveGameState } from './types';
+import type { InventorySaveData, PlayerVitals, SaveGameState, WeatherType } from './types';
 
 const SAVE_KEY = 'day-x.prototype.save.v1';
+const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'fog'];
 
 export class SaveSystem {
   static save(payload: Omit<SaveGameState, 'version' | 'savedAt'>) {
@@ -25,6 +26,10 @@ export class SaveSystem {
       const parsed = JSON.parse(raw) as SaveGameState;
       if (parsed.version !== 1) return null;
       if (!isValidVitals(parsed.stats) || !isValidInventory(parsed.inventory)) return null;
+      if (!Array.isArray(parsed.lootSpots)) parsed.lootSpots = [];
+      if (typeof parsed.timeOfDay !== 'number') parsed.timeOfDay = 8.25;
+      if (!VALID_WEATHER.includes(parsed.weather)) parsed.weather = 'cloudy';
+      if (!parsed.magazines) parsed.magazines = {};
       return parsed;
     } catch {
       return null;
