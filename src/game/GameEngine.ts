@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BUILDING_LOOT, ITEMS } from './data';
+import { BUILDING_LOOT } from './data';
 import { Inventory } from './Inventory';
 import { LootSystem } from './LootSystem';
 import { Zombie } from './Zombie';
@@ -54,6 +54,10 @@ export class GameEngine {
     window.removeEventListener('keyup', this.onKeyUp);
     document.removeEventListener('mousemove', this.onMouseMove);
     document.removeEventListener('mousedown', this.onMouseDown);
+  }
+
+  private pressed(code: string) {
+    return this.keys[code] === true;
   }
 
   private setupScene() {
@@ -185,11 +189,11 @@ export class GameEngine {
   }
 
   private updateMovement(delta: number) {
-    const forward = Number(this.keys.KeyW) - Number(this.keys.KeyS);
-    const strafe = Number(this.keys.KeyD) - Number(this.keys.KeyA);
+    const forward = (this.pressed('KeyW') ? 1 : 0) - (this.pressed('KeyS') ? 1 : 0);
+    const strafe = (this.pressed('KeyD') ? 1 : 0) - (this.pressed('KeyA') ? 1 : 0);
     const moving = forward !== 0 || strafe !== 0;
-    const sneaking = this.keys.ControlLeft || this.keys.ControlRight || this.keys.KeyC;
-    const sprinting = this.keys.ShiftLeft && moving && !sneaking && this.stats.stamina > 4;
+    const sneaking = this.pressed('ControlLeft') || this.pressed('ControlRight') || this.pressed('KeyC');
+    const sprinting = this.pressed('ShiftLeft') && moving && !sneaking && this.stats.stamina > 4;
     const speed = sneaking ? 1.45 : sprinting ? 6.0 : 3.25;
 
     const direction = this.scratchVector.set(strafe, 0, -forward);
@@ -201,7 +205,7 @@ export class GameEngine {
     if (sprinting) this.stats.stamina = Math.max(0, this.stats.stamina - 18 * delta);
     else this.stats.stamina = Math.min(100, this.stats.stamina + (sneaking ? 12 : 9) * delta);
 
-    if (this.keys.Space && this.grounded && this.stats.stamina > 8) {
+    if (this.pressed('Space') && this.grounded && this.stats.stamina > 8) {
       this.verticalVelocity = 5;
       this.grounded = false;
       this.stats.stamina -= 8;
