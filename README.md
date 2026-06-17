@@ -21,26 +21,35 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 
 - WASD: Bewegen
 - Maus: Blickrichtung
-- Linksklick: Angreifen / Schießen
+- Linksklick: Nahkampf / Schießen
 - Shift: Sprinten
 - C oder Strg: Schleichen
 - Space: Springen
-- E: Lootspot durchsuchen
+- E: Item im Lootspot aufnehmen, wenn du direkt darauf schaust
 - Tab: Inventar ein-/ausblenden
-- R: Nachladen / Munitionsprüfung
+- R: Ausgerüstete Schusswaffe nachladen
 - 1/2/3: Waffe wechseln, wenn vorhanden
+- F: beste Nahrung verwenden
+- G: bestes Getränk verwenden
+- H: Medizin verwenden
+- F6: Spielstand speichern
+- F9: Spielstand laden
+- X: Drop-System ist vorbereitet, aber noch nicht aktiv
 
 ## Prototyp-Inhalt
 
 - Hauptmenü
 - Three.js-Spielwelt mit Platzhalter-Gebäuden
 - First-Person-Controller mit Pointer Lock
-- HP, Ausdauer, Hunger, Durst, Blutung
-- Inventar mit Kapazität, Rucksäcken, Kleidung/Rüstung
-- Lootspots mit Gebäudetyp-spezifischen Itempools
-- Zombies mit Sicht-/Geräuschreaktion und Nahkampfangriff
-- Waffen-Grundsystem für Nahkampf und einfache Schusswaffen
-- HUD und Inventar-Overlay
+- HP, Ausdauer, Hunger, Durst, Blutung und vorbereitetem Infektionsstatus
+- Inventar mit begrenzten Slots, ausrüstbaren Waffen, Rüstung und Rucksäcken
+- Rucksäcke erhöhen die Kapazität, Rüstung reduziert Schaden
+- Lootspots mit Spawn-Chance, maximal einem Item und Gebäudetyp-spezifischen Itempools
+- Itempools wie `residential_common`, `police_ammo`, `military_weapons`, `hospital_medical` und `industrial_tools`
+- Zombies mit Wandern, Sicht, Geräuschreaktion, Verfolgung, Suche und Nahkampfangriff
+- Waffen-Grundsystem mit Nahkampf, Pistole, Gewehr, Munition, Magazinen, Nachladen, Feuerrate und Geräuschradius
+- HUD, Interaktionsanzeige und Inventar-Overlay
+- Lokales Save-System über `localStorage` für Spielerposition, Werte, Inventar, ausgerüstete Items und Magazine
 
 ## Design-Regel
 

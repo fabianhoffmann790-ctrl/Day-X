@@ -47,7 +47,7 @@ h1 { margin: 0 0 14px; font-size: clamp(46px, 8vw, 96px); line-height: 0.9; }
   position: fixed;
   left: 18px;
   top: 18px;
-  width: 380px;
+  width: 430px;
   max-width: calc(100vw - 36px);
   padding: 14px;
   background: rgba(5, 8, 6, 0.78);
@@ -55,24 +55,38 @@ h1 { margin: 0 0 14px; font-size: clamp(46px, 8vw, 96px); line-height: 0.9; }
   backdrop-filter: blur(8px);
   pointer-events: none;
 }
-.stat { display: grid; grid-template-columns: 86px 1fr; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.stat { display: grid; grid-template-columns: 86px 1fr 34px; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.stat b { text-align: right; color: #e7ebdf; font-size: 12px; }
 meter { width: 100%; height: 14px; }
 .quick-row { display: flex; gap: 12px; flex-wrap: wrap; color: #cbd3c6; font-size: 12px; margin-top: 8px; }
+.danger { color: #ffb4a8; font-weight: 800; }
+.interaction {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(240, 228, 176, 0.35);
+  background: rgba(240, 228, 176, 0.08);
+  color: #f1e4b0;
+  font-size: 13px;
+}
 .message { min-height: 22px; margin: 10px 0 0; color: #f1e4b0; font-size: 13px; }
 .inventory {
   position: fixed;
   right: 18px;
   top: 18px;
-  width: 320px;
+  width: 380px;
   max-height: calc(100vh - 36px);
   overflow: auto;
   padding: 18px;
-  background: rgba(8, 10, 9, 0.9);
+  background: rgba(8, 10, 9, 0.92);
   border: 1px solid rgba(255,255,255,0.15);
 }
 .inventory h2 { margin-top: 0; }
+.inventory-help { color: #aeb8aa; font-size: 12px; line-height: 1.5; }
 .inventory ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-.inventory li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(255,255,255,0.06); }
+.inventory li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
+.inventory li.equipped { border-color: rgba(240, 228, 176, 0.45); background: rgba(240, 228, 176, 0.08); }
+.inventory li div { display: grid; gap: 3px; }
+.inventory li small { color: #aeb8aa; }
 .crosshair {
   position: fixed;
   left: 50%;
