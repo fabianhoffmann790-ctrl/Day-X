@@ -1,11 +1,28 @@
 import * as THREE from 'three';
 
+type ZombieState = 'wandering' | 'investigating' | 'chasing' | 'searching';
+
+interface ZombieUpdateContext {
+  playerPosition: THREE.Vector3;
+  noiseOrigin: THREE.Vector3;
+  noiseRadius: number;
+  onAttack: (damage: number, bleedChance: number) => void;
+}
+
 export class Zombie {
   public mesh: THREE.Group;
-  public hp = 70;
+  public hp = 76;
   public alerted = false;
+  public state: ZombieState = 'wandering';
+
   private attackCooldown = 0;
+  private lostSightTimer = 0;
+  private searchTimer = 0;
   private wanderTarget = new THREE.Vector3();
+  private investigationTarget = new THREE.Vector3();
+  private lastKnownPlayerPosition = new THREE.Vector3();
+  private readonly spawnPoint = new THREE.Vector3();
+  private readonly forward = new THREE.Vector3();
 
   constructor(position: THREE.Vector3) {
     this.mesh = new THREE.Group();
@@ -21,6 +38,7 @@ export class Zombie {
     head.position.y = 1.75;
     this.mesh.add(body, head);
     this.mesh.position.copy(position);
+    this.spawnPoint.copy(position);
     this.pickWanderTarget();
   }
 
@@ -31,37 +49,99 @@ export class Zombie {
   damage(amount: number) {
     this.hp -= amount;
     this.alerted = true;
+    this.state = 'chasing';
+    this.lastKnownPlayerPosition.copy(this.mesh.position);
     if (this.hp <= 0) this.mesh.visible = false;
   }
 
-  update(delta: number, playerPosition: THREE.Vector3, playerNoise: number, onAttack: (damage: number) => void) {
+  update(delta: number, context: ZombieUpdateContext) {
     if (!this.alive) return;
-    this.attackCooldown = Math.max(0, this.attackCooldown - delta);
-    const toPlayer = playerPosition.clone().sub(this.mesh.position);
-    const distance = toPlayer.length();
-    const canSee = distance < 22;
-    const canHear = distance < 8 + playerNoise * 30;
-    if (canSee || canHear) this.alerted = true;
 
-    const target = this.alerted ? playerPosition : this.wanderTarget;
-    const direction = target.clone().sub(this.mesh.position);
-    direction.y = 0;
-    const targetDistance = direction.length();
-    if (targetDistance > 0.15) {
-      direction.normalize();
-      const speed = this.alerted ? 2.15 : 0.55;
-      this.mesh.position.addScaledVector(direction, speed * delta);
-      this.mesh.lookAt(target.x, this.mesh.position.y, target.z);
+    this.attackCooldown = Math.max(0, this.attackCooldown - delta);
+    const toPlayer = context.playerPosition.clone().sub(this.mesh.position);
+    const playerDistance = toPlayer.length();
+    const canSeePlayer = this.canSeePlayer(toPlayer, playerDistance);
+    const canHearPlayer = context.noiseRadius > 0 && this.mesh.position.distanceTo(context.noiseOrigin) <= context.noiseRadius;
+
+    if (canSeePlayer) {
+      this.alerted = true;
+      this.state = 'chasing';
+      this.lostSightTimer = 0;
+      this.lastKnownPlayerPosition.copy(context.playerPosition);
+    } else if (canHearPlayer) {
+      this.alerted = true;
+      this.state = this.state === 'chasing' ? 'chasing' : 'investigating';
+      this.investigationTarget.copy(context.noiseOrigin);
+      this.lastKnownPlayerPosition.copy(context.noiseOrigin);
+    } else if (this.state === 'chasing') {
+      this.lostSightTimer += delta;
+      if (this.lostSightTimer > 4.5) {
+        this.state = 'searching';
+        this.searchTimer = 4;
+      }
     }
 
-    if (!this.alerted && this.mesh.position.distanceTo(this.wanderTarget) < 1) this.pickWanderTarget();
-    if (distance < 1.55 && this.attackCooldown <= 0) {
-      this.attackCooldown = 1.35;
-      onAttack(18);
+    if (this.state === 'wandering') this.updateWandering(delta);
+    if (this.state === 'investigating') this.moveTowards(this.investigationTarget, 1.45, delta, () => {
+      this.state = 'searching';
+      this.searchTimer = 3.5;
+    });
+    if (this.state === 'searching') this.updateSearching(delta);
+    if (this.state === 'chasing') this.moveTowards(this.lastKnownPlayerPosition, 2.35, delta);
+
+    if (playerDistance < 1.55 && this.attackCooldown <= 0) {
+      this.attackCooldown = 1.25;
+      context.onAttack(19, 0.28);
     }
   }
 
+  private updateWandering(delta: number) {
+    this.moveTowards(this.wanderTarget, 0.62, delta, () => this.pickWanderTarget());
+  }
+
+  private updateSearching(delta: number) {
+    this.searchTimer -= delta;
+    const jitterTarget = this.lastKnownPlayerPosition.clone().add(new THREE.Vector3(Math.sin(performance.now() * 0.001) * 2.4, 0, Math.cos(performance.now() * 0.0013) * 2.4));
+    this.moveTowards(jitterTarget, 1.05, delta);
+    if (this.searchTimer <= 0) {
+      this.alerted = false;
+      this.state = 'wandering';
+      this.lostSightTimer = 0;
+      this.pickWanderTarget();
+    }
+  }
+
+  private moveTowards(target: THREE.Vector3, speed: number, delta: number, onArrive?: () => void) {
+    const direction = target.clone().sub(this.mesh.position);
+    direction.y = 0;
+    const distance = direction.length();
+    if (distance <= 0.3) {
+      onArrive?.();
+      return;
+    }
+
+    direction.normalize();
+    this.mesh.position.addScaledVector(direction, speed * delta);
+    this.mesh.lookAt(target.x, this.mesh.position.y, target.z);
+  }
+
+  private canSeePlayer(toPlayer: THREE.Vector3, distance: number) {
+    if (distance < 3) return true;
+    if (distance > 22) return false;
+
+    this.mesh.getWorldDirection(this.forward);
+    const directionToPlayer = toPlayer.clone().normalize();
+    const visionCone = this.forward.dot(directionToPlayer);
+    return visionCone > 0.18;
+  }
+
   private pickWanderTarget() {
-    this.wanderTarget.set((Math.random() - 0.5) * 70, 0, (Math.random() - 0.5) * 70);
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 6 + Math.random() * 16;
+    this.wanderTarget.set(
+      this.spawnPoint.x + Math.cos(angle) * radius,
+      0,
+      this.spawnPoint.z + Math.sin(angle) * radius
+    );
   }
 }
