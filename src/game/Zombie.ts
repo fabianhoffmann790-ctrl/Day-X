@@ -22,7 +22,6 @@ export class Zombie {
   private investigationTarget = new THREE.Vector3();
   private lastKnownPlayerPosition = new THREE.Vector3();
   private readonly spawnPoint = new THREE.Vector3();
-  private readonly forward = new THREE.Vector3();
 
   constructor(position: THREE.Vector3) {
     this.mesh = new THREE.Group();
@@ -60,7 +59,7 @@ export class Zombie {
     this.attackCooldown = Math.max(0, this.attackCooldown - delta);
     const toPlayer = context.playerPosition.clone().sub(this.mesh.position);
     const playerDistance = toPlayer.length();
-    const canSeePlayer = this.canSeePlayer(toPlayer, playerDistance);
+    const canSeePlayer = this.canSeePlayer(playerDistance);
     const canHearPlayer = context.noiseRadius > 0 && this.mesh.position.distanceTo(context.noiseOrigin) <= context.noiseRadius;
 
     if (canSeePlayer) {
@@ -125,14 +124,10 @@ export class Zombie {
     this.mesh.lookAt(target.x, this.mesh.position.y, target.z);
   }
 
-  private canSeePlayer(toPlayer: THREE.Vector3, distance: number) {
+  private canSeePlayer(distance: number) {
     if (distance < 3) return true;
-    if (distance > 22) return false;
-
-    this.mesh.getWorldDirection(this.forward);
-    const directionToPlayer = toPlayer.clone().normalize();
-    const visionCone = this.forward.dot(directionToPlayer);
-    return visionCone > 0.18;
+    const sightRange = this.alerted ? 24 : 18;
+    return distance <= sightRange;
   }
 
   private pickWanderTarget() {
