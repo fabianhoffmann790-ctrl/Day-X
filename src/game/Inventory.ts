@@ -89,6 +89,22 @@ export class Inventory {
     return true;
   }
 
+  equipBestArmor() {
+    const armor = [...this.items.keys()]
+      .map((id) => ITEMS[id])
+      .filter((item): item is ItemDefinition => Boolean(item) && (item.type === 'armor' || item.type === 'clothing'))
+      .sort((a, b) => (b.armor ?? 0) - (a.armor ?? 0))[0];
+    return armor ? this.equip(armor.id) : false;
+  }
+
+  equipBestBackpack() {
+    const backpack = [...this.items.keys()]
+      .map((id) => ITEMS[id])
+      .filter((item): item is ItemDefinition => Boolean(item) && item.type === 'backpack')
+      .sort((a, b) => (b.capacityBonus ?? 0) - (a.capacityBonus ?? 0))[0];
+    return backpack ? this.equip(backpack.id) : false;
+  }
+
   weapons(): ItemDefinition[] {
     return [...this.items.keys()].map((id) => ITEMS[id]).filter((item): item is ItemDefinition => Boolean(item) && isWeapon(item));
   }
@@ -100,6 +116,14 @@ export class Inventory {
 
   equippedWeapon(): ItemDefinition | null {
     return this.equippedWeaponId ? ITEMS[this.equippedWeaponId] : null;
+  }
+
+  equippedArmor(): ItemDefinition | null {
+    return this.equippedArmorId ? ITEMS[this.equippedArmorId] : null;
+  }
+
+  equippedBackpack(): ItemDefinition | null {
+    return this.equippedBackpackId ? ITEMS[this.equippedBackpackId] : null;
   }
 
   ammoForEquippedWeapon() {
@@ -117,11 +141,6 @@ export class Inventory {
     if (!item || !this.has(itemId) || !USABLE_TYPES.includes(item.type)) return null;
     this.remove(itemId, 1);
     return item;
-  }
-
-  useFirstOfType(type: ItemType): ItemDefinition | null {
-    const item = [...this.items.keys()].map((id) => ITEMS[id]).find((candidate) => candidate?.type === type);
-    return item ? this.use(item.id) : null;
   }
 
   useBestFood() {
