@@ -5,18 +5,8 @@ const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'fog'];
 
 export class SaveSystem {
   static save(payload: Omit<SaveGameState, 'version' | 'savedAt'>) {
-    const saveGame: SaveGameState = {
-      version: 1,
-      savedAt: Date.now(),
-      ...payload
-    };
-
-    try {
-      window.localStorage.setItem(SAVE_KEY, JSON.stringify(saveGame));
-      return true;
-    } catch {
-      return false;
-    }
+    const saveGame: SaveGameState = { version: 1, savedAt: Date.now(), ...payload };
+    try { window.localStorage.setItem(SAVE_KEY, JSON.stringify(saveGame)); return true; } catch { return false; }
   }
 
   static load(): SaveGameState | null {
@@ -31,31 +21,19 @@ export class SaveSystem {
       if (!VALID_WEATHER.includes(parsed.weather)) parsed.weather = 'cloudy';
       if (!parsed.magazines) parsed.magazines = {};
       if (!Array.isArray(parsed.campfires)) parsed.campfires = [];
+      if (!parsed.persistentWorld) parsed.persistentWorld = { doors: [], containers: [], placedObjects: [], dynamicEvents: [], hordes: [], discoveredHints: [] };
+      if (!Array.isArray(parsed.persistentWorld.doors)) parsed.persistentWorld.doors = [];
+      if (!Array.isArray(parsed.persistentWorld.containers)) parsed.persistentWorld.containers = [];
+      if (!Array.isArray(parsed.persistentWorld.placedObjects)) parsed.persistentWorld.placedObjects = [];
+      if (!Array.isArray(parsed.persistentWorld.dynamicEvents)) parsed.persistentWorld.dynamicEvents = [];
+      if (!Array.isArray(parsed.persistentWorld.hordes)) parsed.persistentWorld.hordes = [];
+      if (!Array.isArray(parsed.persistentWorld.discoveredHints)) parsed.persistentWorld.discoveredHints = [];
       return parsed;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
 
-  static clear() {
-    try {
-      window.localStorage.removeItem(SAVE_KEY);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  static clear() { try { window.localStorage.removeItem(SAVE_KEY); return true; } catch { return false; } }
 }
 
-function isValidVitals(value: PlayerVitals | undefined): value is PlayerVitals {
-  return Boolean(value)
-    && typeof value.hp === 'number'
-    && typeof value.stamina === 'number'
-    && typeof value.hunger === 'number'
-    && typeof value.thirst === 'number'
-    && typeof value.bleeding === 'boolean';
-}
-
-function isValidInventory(value: InventorySaveData | undefined): value is InventorySaveData {
-  return Boolean(value) && Array.isArray(value.items);
-}
+function isValidVitals(value: PlayerVitals | undefined): value is PlayerVitals { return Boolean(value) && typeof value.hp === 'number' && typeof value.stamina === 'number' && typeof value.hunger === 'number' && typeof value.thirst === 'number' && typeof value.bleeding === 'boolean'; }
+function isValidInventory(value: InventorySaveData | undefined): value is InventorySaveData { return Boolean(value) && Array.isArray(value.items); }
