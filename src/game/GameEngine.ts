@@ -1,20 +1,18 @@
 import * as THREE from 'three';
-import { BUILDING_LOOT, ITEMS } from './data';
+import { AtmosphereSystem } from './AtmosphereSystem';
+import { BALANCE } from './Balance';
+import { ITEMS } from './data';
 import { Inventory } from './Inventory';
 import { LootSystem } from './LootSystem';
 import { applyDamage, applyItemEffects, cloneDefaultVitals, updatePlayerVitals } from './PlayerStats';
 import { SaveSystem } from './SaveSystem';
+import { SoundSystem } from './SoundSystem';
+import { WorldBuilder, type WorldLootSpot } from './WorldBuilder';
 import { Zombie } from './Zombie';
-import type { BuildingType, HudState, LootSpotDefinition, PlayerVitals, SpawnedLoot } from './types';
+import { ZombieSpawner } from './ZombieSpawner';
+import type { HudState, PlayerVitals, SpawnZoneDefinition } from './types';
 
 type KeyMap = Record<string, boolean>;
-
-interface LootSpot {
-  mesh: THREE.Mesh;
-  definition: LootSpotDefinition;
-  spawnedLoot: SpawnedLoot | null;
-  taken: boolean;
-}
 
 export class GameEngine {
   private renderer: THREE.WebGLRenderer;
@@ -22,9 +20,12 @@ export class GameEngine {
   private camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   private keys: KeyMap = {};
   private zombies: Zombie[] = [];
-  private lootSpots: LootSpot[] = [];
+  private lootSpots: WorldLootSpot[] = [];
+  private spawnZones: SpawnZoneDefinition[] = [];
   private inventory = new Inventory();
   private loot = new LootSystem();
+  private sound = new SoundSystem();
+  private atmosphere!: AtmosphereSystem;
   private clock = new THREE.Clock();
   private raycaster = new THREE.Raycaster();
   private animationId = 0;
@@ -33,14 +34,18 @@ export class GameEngine {
   private verticalVelocity = 0;
   private grounded = true;
   private noiseRadius = 0;
+  private noiseLabel = 'leise';
   private message = 'Suche Gebäude ab. Schleichen ist oft sicherer als Kämpfen.';
   private interactionPrompt = '';
+  private warning = '';
   private inventoryOpen = false;
   private stats: PlayerVitals = cloneDefaultVitals();
   private lastPrimaryAttack = 0;
   private reloadTimer = 0;
   private autoSaveTimer = 0;
-  private hoveredLoot: LootSpot | null = null;
+  private stepTimer = 0;
+  private damageFlash = 0;
+  private hoveredLoot: WorldLootSpot | null = null;
   private magazineAmmo = new Map<string, number>();
   private scratchVector = new THREE.Vector3();
 
@@ -48,10 +53,11 @@ export class GameEngine {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.camera.position.set(0, 1.75, 8);
+    this.camera.position.set(-120, 1.75, 2);
     this.camera.rotation.order = 'YXZ';
     this.setupScene();
     this.loadGame(false);
+    new ZombieSpawner(this.scene, this.zombies, this.spawnZones).spawnInitial(this.camera.position);
     this.bindEvents();
     this.emitHud();
     this.loop();
@@ -72,77 +78,10 @@ export class GameEngine {
   }
 
   private setupScene() {
-    this.scene.background = new THREE.Color(0x111611);
-    this.scene.fog = new THREE.Fog(0x111611, 18, 92);
-    this.scene.add(new THREE.HemisphereLight(0xaab0a0, 0x0b0f0b, 1.25));
-    const sun = new THREE.DirectionalLight(0xf1e6c8, 1.45);
-    sun.position.set(18, 28, 10);
-    this.scene.add(sun);
-
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(140, 140),
-      new THREE.MeshStandardMaterial({ color: 0x2d332b, roughness: 1 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    this.scene.add(ground);
-
-    this.addBuilding('house', -16, -6, 8, 7, 0x3f4239);
-    this.addBuilding('house', -4, -18, 7, 7, 0x4a453a);
-    this.addBuilding('market', 13, -14, 12, 8, 0x56513f);
-    this.addBuilding('police', 19, 7, 9, 8, 0x334657);
-    this.addBuilding('hospital', -18, 17, 13, 8, 0x575f5d);
-    this.addBuilding('workshop', 2, 17, 10, 7, 0x534734);
-    this.addBuilding('military', 35, -3, 13, 10, 0x31432e);
-
-    for (let i = 0; i < 18; i += 1) {
-      const zombie = new Zombie(new THREE.Vector3((Math.random() - 0.5) * 86, 0, (Math.random() - 0.5) * 86));
-      this.zombies.push(zombie);
-      this.scene.add(zombie.mesh);
-    }
-  }
-
-  private addBuilding(type: BuildingType, x: number, z: number, width: number, depth: number, color: number) {
-    const height = type === 'military' ? 4.4 : 3.4;
-    const material = new THREE.MeshStandardMaterial({ color, roughness: 0.9, transparent: true, opacity: 0.55 });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-    mesh.position.set(x, height / 2, z);
-    this.scene.add(mesh);
-
-    const doorway = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 2.2, 0.08),
-      new THREE.MeshBasicMaterial({ color: 0x111111 })
-    );
-    doorway.position.set(x, 1.1, z + depth / 2 + 0.045);
-    this.scene.add(doorway);
-
-    const spots = BUILDING_LOOT[type];
-    spots.forEach((definition, index) => {
-      const spawnedLoot = this.loot.spawn(definition);
-      const spot = new THREE.Mesh(
-        new THREE.BoxGeometry(0.72, 0.28, 0.72),
-        new THREE.MeshStandardMaterial({ color: this.colorForLoot(spawnedLoot?.itemId), roughness: 0.7 })
-      );
-      const columns = Math.min(3, spots.length);
-      const offsetX = -width / 2 + 1.4 + (index % columns) * 2.15;
-      const offsetZ = -depth / 2 + 1.35 + Math.floor(index / columns) * 2.15;
-      spot.position.set(x + offsetX, 0.14, z + offsetZ);
-      spot.visible = Boolean(spawnedLoot);
-      spot.userData.label = definition.label;
-      this.scene.add(spot);
-      this.lootSpots.push({ mesh: spot, definition, spawnedLoot, taken: false });
-    });
-  }
-
-  private colorForLoot(itemId?: string) {
-    if (!itemId) return 0x2f332d;
-    const item = ITEMS[itemId];
-    if (!item) return 0xb7a66f;
-    if (item.type === 'food' || item.type === 'drink') return 0xc0aa6d;
-    if (item.type === 'medical') return 0xd6d8d4;
-    if (item.type === 'ammo' || item.type === 'ranged_weapon') return 0x8a7d5b;
-    if (item.type === 'armor' || item.type === 'clothing') return 0x6f7780;
-    if (item.type === 'backpack') return 0x6c5b3e;
-    return 0x9c8b65;
+    const world = new WorldBuilder(this.scene, this.loot).build();
+    this.lootSpots = world.lootSpots;
+    this.spawnZones = world.spawnZones;
+    this.atmosphere = new AtmosphereSystem(this.scene, world.ambient, world.sun);
   }
 
   private bindEvents() {
@@ -155,6 +94,7 @@ export class GameEngine {
   }
 
   private onCanvasClick = () => {
+    this.sound.unlock();
     this.canvas.requestPointerLock();
   };
 
@@ -169,18 +109,23 @@ export class GameEngine {
     if (event.code === 'Tab') {
       event.preventDefault();
       this.inventoryOpen = !this.inventoryOpen;
+      this.sound.play('inventory', 0.15);
+      this.raiseNoise(BALANCE.sound.inventoryNoiseRadius, 'Inventar raschelt.');
       this.emitHud();
     }
     if (event.code === 'KeyE') this.interact();
     if (event.code === 'Digit1') this.equipWeaponSlot(0);
     if (event.code === 'Digit2') this.equipWeaponSlot(1);
     if (event.code === 'Digit3') this.equipWeaponSlot(2);
+    if (event.code === 'KeyV') this.equipBestArmor();
+    if (event.code === 'KeyB') this.equipBestBackpack();
     if (event.code === 'KeyR') this.reloadEquippedWeapon();
     if (event.code === 'KeyF') this.consumeFood();
     if (event.code === 'KeyG') this.consumeDrink();
     if (event.code === 'KeyH') this.useMedical();
     if (event.code === 'F6') this.saveGame(true);
     if (event.code === 'F9') this.loadGame(true);
+    if (event.code === BALANCE.loot.debugRespawnKey) this.regenerateLoot(true);
     if (event.code === 'KeyX') this.message = 'Drop-System vorbereitet: Items bleiben aktuell noch im Inventar.';
   };
 
@@ -212,7 +157,10 @@ export class GameEngine {
     this.updateMovement(delta);
     updatePlayerVitals(this.stats, delta);
     this.updateReload(delta);
+    this.atmosphere.update(delta, this.camera.position);
     this.updateInteractionPrompt();
+    this.updateWarnings();
+    this.damageFlash = Math.max(0, this.damageFlash - delta * 2.6);
 
     let alerted = 0;
     for (const zombie of this.zombies) {
@@ -220,12 +168,15 @@ export class GameEngine {
         playerPosition: this.camera.position,
         noiseOrigin: this.camera.position,
         noiseRadius: this.noiseRadius,
+        isNight: this.atmosphere.isNight(),
+        weather: this.atmosphere.weather,
         onAttack: (damage, bleedChance) => this.takeDamage(damage, bleedChance)
       });
       if (zombie.alive && zombie.alerted) alerted += 1;
     }
 
     this.noiseRadius = Math.max(0, this.noiseRadius - delta * 24);
+    if (this.noiseRadius <= 0.2) this.noiseLabel = 'leise';
     this.autoSaveTimer += delta;
     if (this.autoSaveTimer > 20) {
       this.autoSaveTimer = 0;
@@ -250,14 +201,14 @@ export class GameEngine {
       this.camera.position.addScaledVector(direction, speed * delta);
     }
 
-    if (sprinting) this.stats.stamina = Math.max(0, this.stats.stamina - 18 * delta);
-    else this.stats.stamina = Math.min(100, this.stats.stamina + (sneaking ? 12 : 9) * delta);
+    if (sprinting) this.stats.stamina = Math.max(0, this.stats.stamina - BALANCE.vitals.sprintStaminaPerSecond * delta);
+    else this.stats.stamina = Math.min(100, this.stats.stamina + (sneaking ? BALANCE.vitals.sneakStaminaRegenPerSecond : BALANCE.vitals.walkStaminaRegenPerSecond) * delta);
 
-    if (this.pressed('Space') && this.grounded && this.stats.stamina > 8) {
+    if (this.pressed('Space') && this.grounded && this.stats.stamina > BALANCE.vitals.jumpStaminaCost) {
       this.verticalVelocity = 5;
       this.grounded = false;
-      this.stats.stamina -= 8;
-      this.noiseRadius = Math.max(this.noiseRadius, 12);
+      this.stats.stamina -= BALANCE.vitals.jumpStaminaCost;
+      this.raiseNoise(BALANCE.sound.jumpNoiseRadius, 'Sprung landet laut.');
     }
 
     this.verticalVelocity -= 12 * delta;
@@ -267,14 +218,35 @@ export class GameEngine {
       this.verticalVelocity = 0;
       this.grounded = true;
     }
-    this.camera.position.x = THREE.MathUtils.clamp(this.camera.position.x, -66, 66);
-    this.camera.position.z = THREE.MathUtils.clamp(this.camera.position.z, -66, 66);
+    this.camera.position.x = THREE.MathUtils.clamp(this.camera.position.x, -BALANCE.world.playerBounds, BALANCE.world.playerBounds);
+    this.camera.position.z = THREE.MathUtils.clamp(this.camera.position.z, -BALANCE.world.playerBounds, BALANCE.world.playerBounds);
 
-    if (moving) this.noiseRadius = Math.max(this.noiseRadius, sneaking ? 2.4 : sprinting ? 18 : 7);
+    if (moving) {
+      const radius = sneaking ? BALANCE.sound.sneakNoiseRadius : sprinting ? BALANCE.sound.sprintNoiseRadius : BALANCE.sound.walkNoiseRadius;
+      this.raiseNoise(radius);
+      this.stepTimer -= delta;
+      if (this.stepTimer <= 0) {
+        this.sound.play(sprinting ? 'sprint' : 'footstep', sprinting ? 0.34 : 0.18);
+        this.stepTimer = sprinting ? 0.32 : sneaking ? 0.82 : 0.55;
+        if (sprinting) this.message = 'Du sprintest laut. Zombies in der Nähe könnten reagieren.';
+      }
+    } else {
+      this.stepTimer = 0;
+    }
   }
 
   private updateReload(delta: number) {
     this.reloadTimer = Math.max(0, this.reloadTimer - delta);
+  }
+
+  private updateWarnings() {
+    if (this.stats.hp <= 25) this.warning = 'Kritische Verletzung: HP niedrig.';
+    else if (this.stats.bleeding) this.warning = 'Du blutest. Verband oder Blutbeutel benutzen.';
+    else if (this.stats.thirst <= 18) this.warning = 'Durst kritisch. Suche Wasser.';
+    else if (this.stats.hunger <= 18) this.warning = 'Hunger niedrig. Nahrung wird wichtig.';
+    else if (this.atmosphere.isNight()) this.warning = 'Nacht: Sicht schlecht, Bewegung riskanter.';
+    else if (this.atmosphere.weather === 'fog') this.warning = 'Nebel reduziert die Sicht stark.';
+    else this.warning = '';
   }
 
   private updateInteractionPrompt() {
@@ -306,13 +278,16 @@ export class GameEngine {
     if (!item) return;
     const amount = target.spawnedLoot.count;
     if (!this.inventory.add(item.id, amount)) {
-      this.message = `Kein Platz für ${item.name}. Rucksack finden oder später Drop-System nutzen.`;
+      this.message = `Inventar voll: Kein Platz für ${item.name}. Rucksack finden oder später Drop-System nutzen.`;
       return;
     }
 
     target.taken = true;
     target.mesh.visible = false;
+    target.respawnAt = performance.now() / 1000 + BALANCE.loot.respawnDelaySeconds;
     target.spawnedLoot = null;
+    this.sound.play('pickup', 0.18);
+    this.raiseNoise(BALANCE.sound.pickupNoiseRadius);
     this.message = `Aufgenommen: ${item.name}${amount > 1 ? ` x${amount}` : ''}.`;
     this.updateInteractionPrompt();
   }
@@ -329,10 +304,28 @@ export class GameEngine {
     this.message = weapon ? `Ausgerüstet: ${weapon.name}.` : 'Keine Waffe in diesem Slot.';
   }
 
+  private equipBestArmor() {
+    this.message = this.inventory.equipBestArmor()
+      ? `Rüstung/Kleidung ausgerüstet: ${this.inventory.equippedArmor()?.name}.`
+      : 'Keine Rüstung oder Kleidung im Inventar.';
+  }
+
+  private equipBestBackpack() {
+    this.message = this.inventory.equipBestBackpack()
+      ? `Rucksack ausgerüstet: ${this.inventory.equippedBackpack()?.name}.`
+      : 'Kein Rucksack im Inventar.';
+  }
+
   private primaryAttack() {
     if (this.stats.hp <= 0) return;
     const weapon = this.inventory.equippedWeapon();
-    const weaponData = weapon?.weapon ?? { kind: 'melee' as const, damage: 12, range: 1.7, noiseRadius: 3, fireRate: 62 };
+    const weaponData = weapon?.weapon ?? {
+      kind: 'melee' as const,
+      damage: BALANCE.weapons.fallbackMeleeDamage,
+      range: BALANCE.weapons.fallbackMeleeRange,
+      noiseRadius: BALANCE.weapons.fallbackMeleeNoiseRadius,
+      fireRate: BALANCE.weapons.fallbackMeleeFireRate
+    };
     const now = performance.now();
     const cooldownMs = 60000 / weaponData.fireRate;
     if (now - this.lastPrimaryAttack < cooldownMs) return;
@@ -346,20 +339,20 @@ export class GameEngine {
       if (!weapon) return;
       const loaded = this.magazineAmmo.get(weapon.id) ?? 0;
       if (loaded <= 0) {
-        this.message = 'Magazin leer. Drücke R zum Nachladen.';
+        this.message = 'Waffe leer. Drücke R zum Nachladen.';
         return;
       }
       this.magazineAmmo.set(weapon.id, loaded - 1);
-      this.noiseRadius = Math.max(this.noiseRadius, weaponData.noiseRadius);
-      this.message = `${weapon.name} abgefeuert. Der Schuss war laut.`;
+      this.sound.play('gunshot', 0.82);
+      this.raiseNoise(weaponData.noiseRadius, 'Schuss abgefeuert. Zombies könnten aus großer Entfernung reagieren.');
     } else {
-      this.stats.stamina = Math.max(0, this.stats.stamina - 6);
-      this.noiseRadius = Math.max(this.noiseRadius, weaponData.noiseRadius);
+      this.stats.stamina = Math.max(0, this.stats.stamina - BALANCE.vitals.meleeStaminaCost);
+      this.raiseNoise(weaponData.noiseRadius);
     }
 
     const hit = this.findZombieInCrosshair(weaponData.range);
     if (hit) {
-      hit.damage(weaponData.damage);
+      hit.damage(weaponData.damage, this.camera.position);
       this.message = hit.alive ? 'Treffer. Der Zombie bleibt gefährlich.' : 'Zombie ausgeschaltet.';
     } else if (weaponData.kind === 'melee') {
       this.message = 'Du triffst ins Leere.';
@@ -408,11 +401,16 @@ export class GameEngine {
     this.inventory.consumeAmmo(data.ammoType, amount);
     this.magazineAmmo.set(weapon.id, loaded + amount);
     this.reloadTimer = data.reloadTime ?? 1;
+    this.sound.play('reload', 0.24);
+    this.raiseNoise(BALANCE.sound.reloadNoiseRadius, 'Nachladen macht Geräusche.');
     this.message = `${weapon.name} nachgeladen: ${loaded + amount}/${data.magazineSize}.`;
   }
 
   private takeDamage(rawDamage: number, bleedChance: number) {
     const result = applyDamage(this.stats, rawDamage, this.inventory.armor, bleedChance);
+    this.damageFlash = 1;
+    this.sound.play('injury', 0.5);
+    this.raiseNoise(BALANCE.sound.painNoiseRadius);
     this.message = result.startedBleeding
       ? `Zombieangriff! ${Math.round(result.damageTaken)} Schaden, du blutest.`
       : `Zombieangriff! ${Math.round(result.damageTaken)} Schaden. Abstand gewinnen.`;
@@ -425,6 +423,8 @@ export class GameEngine {
       return;
     }
     applyItemEffects(this.stats, item);
+    this.sound.play('consume', 0.16);
+    this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
     this.message = `${item.name} gegessen. Hunger steigt.`;
   }
 
@@ -435,6 +435,8 @@ export class GameEngine {
       return;
     }
     applyItemEffects(this.stats, item);
+    this.sound.play('consume', 0.16);
+    this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
     this.message = `${item.name} getrunken. Durst steigt.`;
   }
 
@@ -445,7 +447,38 @@ export class GameEngine {
       return;
     }
     applyItemEffects(this.stats, item);
+    this.sound.play('consume', 0.14);
     this.message = `${item.name} verwendet.`;
+  }
+
+  private raiseNoise(radius: number, message?: string) {
+    this.noiseRadius = Math.max(this.noiseRadius, radius);
+    this.noiseLabel = radius >= 40 ? 'extrem laut' : radius >= 16 ? 'laut' : radius >= 6 ? 'hörbar' : 'leise';
+    if (message) this.message = message;
+  }
+
+  private regenerateLoot(debug: boolean) {
+    this.lootSpots.forEach((spot) => {
+      spot.spawnedLoot = this.loot.spawn(spot.definition);
+      spot.taken = false;
+      spot.respawnAt = null;
+      spot.mesh.visible = Boolean(spot.spawnedLoot);
+      const material = spot.mesh.material;
+      if (material instanceof THREE.MeshStandardMaterial) material.color.set(this.colorForLoot(spot.spawnedLoot?.itemId));
+    });
+    if (debug) this.message = 'Debug: Lootspots wurden neu generiert.';
+  }
+
+  private colorForLoot(itemId?: string) {
+    if (!itemId) return 0x2f332d;
+    const item = ITEMS[itemId];
+    if (!item) return 0xb7a66f;
+    if (item.type === 'food' || item.type === 'drink') return 0xc0aa6d;
+    if (item.type === 'medical') return 0xd6d8d4;
+    if (item.type === 'ammo' || item.type === 'ranged_weapon') return 0x8a7d5b;
+    if (item.type === 'armor' || item.type === 'clothing') return 0x6f7780;
+    if (item.type === 'backpack') return 0x6c5b3e;
+    return 0x9c8b65;
   }
 
   private saveGame(manual: boolean) {
@@ -457,7 +490,16 @@ export class GameEngine {
       },
       stats: { ...this.stats },
       inventory: this.inventory.toSaveData(),
-      magazines: Object.fromEntries(this.magazineAmmo.entries())
+      magazines: Object.fromEntries(this.magazineAmmo.entries()),
+      lootSpots: this.lootSpots.map((spot) => ({
+        id: spot.id,
+        taken: spot.taken,
+        itemId: spot.spawnedLoot?.itemId ?? null,
+        count: spot.spawnedLoot?.count ?? 0,
+        respawnAt: spot.respawnAt
+      })),
+      timeOfDay: this.atmosphere.timeOfDay,
+      weather: this.atmosphere.weather
     });
     if (manual) this.message = success ? 'Spielstand gespeichert.' : 'Speichern fehlgeschlagen.';
   }
@@ -476,7 +518,23 @@ export class GameEngine {
     this.stats = { ...cloneDefaultVitals(), ...save.stats };
     this.inventory.loadSaveData(save.inventory);
     this.magazineAmmo = new Map(Object.entries(save.magazines ?? {}).map(([key, value]) => [key, Number(value)]));
+    this.atmosphere.setState(save.timeOfDay, save.weather);
+    this.applyLootSave(save.lootSpots ?? []);
     this.message = manual ? 'Spielstand geladen.' : 'Lokaler Spielstand geladen.';
+  }
+
+  private applyLootSave(savedSpots: Array<{ id: string; taken: boolean; itemId: string | null; count: number; respawnAt: number | null }>) {
+    const savedById = new Map(savedSpots.map((spot) => [spot.id, spot]));
+    this.lootSpots.forEach((spot) => {
+      const saved = savedById.get(spot.id);
+      if (!saved) return;
+      spot.taken = saved.taken;
+      spot.respawnAt = saved.respawnAt;
+      spot.spawnedLoot = saved.itemId ? { itemId: saved.itemId, count: saved.count } : null;
+      spot.mesh.visible = Boolean(spot.spawnedLoot) && !spot.taken;
+      const material = spot.mesh.material;
+      if (material instanceof THREE.MeshStandardMaterial) material.color.set(this.colorForLoot(spot.spawnedLoot?.itemId));
+    });
   }
 
   private emitHud(zombiesAlerted = 0) {
@@ -500,11 +558,18 @@ export class GameEngine {
       weapon: weapon?.name ?? 'Fäuste',
       ammo: reserveAmmo,
       ammoText,
+      currentBackpack: this.inventory.equippedBackpack()?.name ?? 'Kein Rucksack',
+      currentArmor: this.inventory.equippedArmor()?.name ?? 'Keine Rüstung',
       zombiesAlerted,
       interactionPrompt: this.interactionPrompt,
       message: this.message,
+      warning: this.warning,
       inventoryOpen: this.inventoryOpen,
-      inventory: this.inventory.entries()
+      inventory: this.inventory.entries(),
+      timeText: this.atmosphere.timeText(),
+      weather: this.atmosphere.weather,
+      noiseLevel: this.noiseLabel,
+      damageFlash: this.damageFlash
     });
   }
 }
