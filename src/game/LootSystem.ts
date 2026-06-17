@@ -1,3 +1,4 @@
+import { BALANCE } from './Balance';
 import { ITEMS, LOOT_POOLS } from './data';
 import type { ItemDefinition, LootSpotDefinition, SpawnedLoot } from './types';
 
@@ -20,7 +21,8 @@ export class LootSystem {
   }
 
   roll(poolId: string, chance: number): ItemDefinition | null {
-    if (Math.random() > chance) return null;
+    const tunedChance = Math.max(0, Math.min(1, chance * BALANCE.loot.globalChanceMultiplier));
+    if (Math.random() > tunedChance) return null;
     const pool = LOOT_POOLS[poolId];
     if (!pool?.length) return null;
 
