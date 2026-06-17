@@ -1,0 +1,567 @@
+import * as THREE from 'three';
+import { BALANCE } from './Balance';
+import { CONTAINER_LOOT, ITEMS, LOOT_POOLS, VEHICLE_LOOT } from './data';
+import type { BuildableKind, ContainerKind, ContainerSaveData, DoorKind, DoorSaveData, DynamicEventKind, DynamicEventSaveData, HordeSaveData, InventoryEntry, PersistentWorldSaveData, PlacedObjectSaveData, VehicleKind } from './types';
+import { Inventory } from './Inventory';
+
+interface DoorObject {
+  id: string;
+  kind: DoorKind;
+  name: string;
+  mesh: THREE.Mesh;
+  open: boolean;
+  locked: boolean;
+  breached: boolean;
+  hp: number;
+}
+
+interface ContainerObject {
+  id: string;
+  kind: ContainerKind;
+  name: string;
+  mesh: THREE.Mesh;
+  opened: boolean;
+  searched: boolean;
+  locked: boolean;
+  items: Map<string, number>;
+}
+
+interface PlacedObject {
+  id: string;
+  kind: BuildableKind;
+  name: string;
+  group: THREE.Group;
+  hp: number;
+  items?: Map<string, number>;
+}
+
+interface DynamicEventObject {
+  id: string;
+  kind: DynamicEventKind;
+  name: string;
+  group: THREE.Group;
+  container: ContainerObject;
+  active: boolean;
+  discovered: boolean;
+  searched: boolean;
+  timeRemaining: number;
+}
+
+interface HordeObject {
+  id: string;
+  group: THREE.Group;
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  size: number;
+  active: boolean;
+  attackCooldown: number;
+}
+
+interface WorldAction {
+  label: string;
+  duration: number;
+  noiseRadius: number;
+  complete: () => string;
+}
+
+export interface PersistentWorldHudState {
+  prompt: string;
+  locationName: string;
+  eventHint: string;
+  compassHeading: string;
+  mapOpen: boolean;
+  buildMode: boolean;
+  selectedBuildable: string;
+  storageOpen: boolean;
+  storageTitle: string;
+  storageUsed: number;
+  storageCapacity: number;
+  storageItems: InventoryEntry[];
+}
+
+const BUILDABLES: BuildableKind[] = ['barricade', 'storage_box', 'wood_wall', 'wood_gate', 'fence_segment', 'sleeping_bag'];
+
+const BUILDABLE_LABELS: Record<BuildableKind, string> = {
+  wood_wall: 'Holzwand',
+  wood_gate: 'Holztor',
+  barricade: 'Barrikade',
+  storage_box: 'Storage-Kiste',
+  fence_segment: 'Zaunsegment',
+  sleeping_bag: 'Schlafsack'
+};
+
+const POIS = [
+  { name: 'Kleine Siedlung', x: -62, z: -8, radius: 52 },
+  { name: 'Supermarkt', x: 18, z: -42, radius: 28 },
+  { name: 'Polizeistation', x: 34, z: 34, radius: 28 },
+  { name: 'Klinik', x: -8, z: 72, radius: 31 },
+  { name: 'Werkstatt/Lagerhalle', x: 72, z: -62, radius: 38 },
+  { name: 'Militär-Checkpoint', x: 128, z: 18, radius: 40 },
+  { name: 'Funkturm', x: 116, z: 112, radius: 26 },
+  { name: 'Bauernhof', x: -126, z: -92, radius: 32 },
+  { name: 'Campingplatz', x: -120, z: 104, radius: 32 },
+  { name: 'Straßensperre', x: 112, z: -8, radius: 28 }
+];
+
+function randomInt(min: number, max: number) { return Math.floor(min + Math.random() * (max - min + 1)); }
+
+function addItems(target: Map<string, number>, itemId: string, count: number) {
+  target.set(itemId, (target.get(itemId) ?? 0) + count);
+}
+
+function entriesWeight(entries: Map<string, number>) {
+  let weight = 0;
+  for (const [id, count] of entries) weight += (ITEMS[id]?.size ?? 1) * count;
+  return Math.round(weight * 10) / 10;
+}
+
+function inventoryEntriesFromMap(items: Map<string, number>): InventoryEntry[] {
+  return [...items.entries()].map(([id, count]) => ({
+    id,
+    name: ITEMS[id]?.name ?? id,
+    type: ITEMS[id]?.type ?? 'tool',
+    count,
+    size: ITEMS[id]?.size ?? 1,
+    weight: ITEMS[id]?.weight ?? 1,
+    totalWeight: Math.round((ITEMS[id]?.weight ?? 1) * count * 10) / 10,
+    condition: 'good',
+    conditionLabel: 'gut',
+    equipped: false,
+    canUse: false,
+    canEquip: false,
+    description: ITEMS[id]?.description ?? ''
+  }));
+}
+
+export class PersistentWorldSystem {
+  private doors: DoorObject[] = [];
+  private containers: ContainerObject[] = [];
+  private placedObjects: PlacedObject[] = [];
+  private events: DynamicEventObject[] = [];
+  private hordes: HordeObject[] = [];
+  private discoveredHints = new Set<string>();
+  private raycaster = new THREE.Raycaster();
+  private hovered: { type: 'door' | 'container' | 'storage'; id: string } | null = null;
+  private storageId: string | null = null;
+  private mapOpen = false;
+  private buildMode = false;
+  private selectedBuildableIndex = 0;
+  private preview: THREE.Mesh;
+  private eventTimer = 0;
+  private hordeTimer = 0;
+
+  constructor(private scene: THREE.Scene) {
+    this.preview = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 0.35), new THREE.MeshBasicMaterial({ color: 0x8fd59d, transparent: true, opacity: 0.32 }));
+    this.preview.visible = false;
+    this.scene.add(this.preview);
+    this.createStaticObjects();
+    this.spawnInitialEvent();
+    this.spawnHorde(new THREE.Vector3(94, 0, 96));
+  }
+
+  update(delta: number, camera: THREE.Camera, playerPosition: THREE.Vector3, noiseRadius: number, isNight: boolean, onHordeDamage: () => void) {
+    this.eventTimer += delta;
+    this.hordeTimer += delta;
+    if (this.eventTimer > BALANCE.events.spawnCheckSeconds) {
+      this.eventTimer = 0;
+      if (this.events.filter((event) => event.active).length < BALANCE.events.maxActiveEvents && Math.random() < BALANCE.events.spawnChance) this.spawnRandomEvent();
+    }
+    if (this.hordeTimer > BALANCE.horde.spawnIntervalSeconds) {
+      this.hordeTimer = 0;
+      if (this.hordes.filter((horde) => horde.active).length < BALANCE.horde.maxHordes) this.spawnHorde(new THREE.Vector3(-110 + Math.random() * 220, 0, -110 + Math.random() * 220));
+    }
+
+    for (const event of this.events) {
+      if (!event.active) continue;
+      event.timeRemaining = Math.max(0, event.timeRemaining - delta);
+      if (event.timeRemaining <= 0 && event.searched) event.active = false;
+      event.group.visible = event.active;
+      if (playerPosition.distanceTo(event.group.position) < BALANCE.events.signalRadius) event.discovered = true;
+    }
+
+    for (const horde of this.hordes) this.updateHorde(horde, delta, playerPosition, noiseRadius, isNight, onHordeDamage);
+    this.updateHover(camera);
+    this.updateBuildPreview(camera, playerPosition);
+  }
+
+  setNoiseAtPlayer(playerPosition: THREE.Vector3, radius: number) {
+    for (const horde of this.hordes) {
+      if (!horde.active) continue;
+      if (horde.position.distanceTo(playerPosition) < Math.max(radius, BALANCE.horde.hearingRadius)) horde.target.copy(playerPosition);
+    }
+  }
+
+  hud(camera: THREE.Camera, playerPosition: THREE.Vector3): PersistentWorldHudState {
+    return {
+      prompt: this.prompt(),
+      locationName: this.locationName(playerPosition),
+      eventHint: this.eventHint(playerPosition),
+      compassHeading: this.compassHeading(camera),
+      mapOpen: this.mapOpen,
+      buildMode: this.buildMode,
+      selectedBuildable: BUILDABLE_LABELS[this.selectedBuildable],
+      storageOpen: Boolean(this.storageId),
+      storageTitle: this.activeStorage()?.name ?? '',
+      storageUsed: this.activeStorage() ? entriesWeight(this.activeStorage()!.items) : 0,
+      storageCapacity: this.activeStorageCapacity(),
+      storageItems: this.activeStorage() ? inventoryEntriesFromMap(this.activeStorage()!.items) : []
+    };
+  }
+
+  toggleMap(inventory: Inventory) {
+    if (!inventory.has('map')) return 'Du brauchst eine Karte, um die Übersicht zu öffnen.';
+    this.mapOpen = !this.mapOpen;
+    return this.mapOpen ? 'Karte geöffnet: POIs werden nur grob angezeigt.' : 'Karte geschlossen.';
+  }
+
+  toggleBuildMode() {
+    this.buildMode = !this.buildMode;
+    this.preview.visible = this.buildMode;
+    return this.buildMode ? `Baumodus: ${BUILDABLE_LABELS[this.selectedBuildable]}. N = wechseln, P = platzieren.` : 'Baumodus geschlossen.';
+  }
+
+  cycleBuildable() {
+    this.buildMode = true;
+    this.selectedBuildableIndex = (this.selectedBuildableIndex + 1) % BUILDABLES.length;
+    return `Bauteil gewählt: ${BUILDABLE_LABELS[this.selectedBuildable]}.`;
+  }
+
+  beginBuild(inventory: Inventory, camera: THREE.Camera, playerPosition: THREE.Vector3): WorldAction | string {
+    this.buildMode = true;
+    const kind = this.selectedBuildable;
+    const missing = this.missingBuildMaterials(inventory, kind);
+    if (missing.length) return `Nicht genug Material für ${BUILDABLE_LABELS[kind]}: ${missing.join(', ')}.`;
+    const position = this.placementPosition(camera, playerPosition);
+    return {
+      label: `Bauen: ${BUILDABLE_LABELS[kind]}`,
+      duration: BALANCE.building.buildSeconds,
+      noiseRadius: BALANCE.building.buildNoiseRadius,
+      complete: () => {
+        this.consumeBuildMaterials(inventory, kind);
+        this.placeObject(kind, position, (camera.rotation as THREE.Euler).y);
+        return `${BUILDABLE_LABELS[kind]} gebaut und persistent gespeichert.`;
+      }
+    };
+  }
+
+  beginInteraction(inventory: Inventory): WorldAction | string | null {
+    if (!this.hovered) return null;
+    if (this.hovered.type === 'door') return this.interactDoor(this.doors.find((door) => door.id === this.hovered?.id)!, inventory);
+    const container = this.containers.find((entry) => entry.id === this.hovered?.id) ?? this.placedObjects.find((entry) => entry.id === this.hovered?.id && entry.kind === 'storage_box');
+    if (!container) return null;
+    if ('kind' in container && container.kind === 'storage_box' && 'items' in container) {
+      this.storageId = container.id;
+      return `${container.name} geöffnet. O = Item hineinlegen, I = Item herausnehmen, Esc = schließen.`;
+    }
+    return this.interactContainer(container as ContainerObject, inventory);
+  }
+
+  closeStorage() { this.storageId = null; return 'Storage geschlossen.'; }
+
+  transferFirstToStorage(inventory: Inventory) {
+    const storage = this.activeStorage();
+    if (!storage) return 'Keine Storage-Kiste geöffnet.';
+    const first = inventory.entries().find((entry) => !entry.equipped);
+    if (!first) return 'Kein nicht-ausgerüstetes Item zum Einlagern.';
+    if (entriesWeight(storage.items) + first.size > this.activeStorageCapacity()) return 'Kiste voll.';
+    if (!inventory.remove(first.id, 1)) return 'Item konnte nicht entfernt werden.';
+    addItems(storage.items, first.id, 1);
+    return `Eingelagert: ${first.name}.`;
+  }
+
+  transferFirstToInventory(inventory: Inventory) {
+    const storage = this.activeStorage();
+    if (!storage) return 'Keine Storage-Kiste geöffnet.';
+    const first = [...storage.items.entries()][0];
+    if (!first) return 'Kiste ist leer.';
+    const [itemId, count] = first;
+    if (!inventory.add(itemId, 1)) return 'Inventar voll.';
+    if (count <= 1) storage.items.delete(itemId); else storage.items.set(itemId, count - 1);
+    return `Entnommen: ${ITEMS[itemId]?.name ?? itemId}.`;
+  }
+
+  toSaveData(): PersistentWorldSaveData {
+    return {
+      doors: this.doors.map((door): DoorSaveData => ({ id: door.id, open: door.open, locked: door.locked, breached: door.breached, hp: door.hp })),
+      containers: this.containers.map((container): ContainerSaveData => ({ id: container.id, opened: container.opened, searched: container.searched, locked: container.locked, items: [...container.items.entries()] })),
+      placedObjects: this.placedObjects.map((object): PlacedObjectSaveData => ({ id: object.id, kind: object.kind, position: { x: object.group.position.x, y: object.group.position.y, z: object.group.position.z }, yaw: object.group.rotation.y, hp: object.hp, items: object.items ? [...object.items.entries()] : undefined })),
+      dynamicEvents: this.events.map((event): DynamicEventSaveData => ({ id: event.id, kind: event.kind, active: event.active, discovered: event.discovered, position: { x: event.group.position.x, z: event.group.position.z }, searched: event.searched, timeRemaining: event.timeRemaining })),
+      hordes: this.hordes.map((horde): HordeSaveData => ({ id: horde.id, position: { x: horde.position.x, z: horde.position.z }, target: { x: horde.target.x, z: horde.target.z }, size: horde.size, active: horde.active })),
+      discoveredHints: [...this.discoveredHints]
+    };
+  }
+
+  loadSaveData(data?: PersistentWorldSaveData) {
+    if (!data) return;
+    const doors = new Map(data.doors.map((door) => [door.id, door]));
+    for (const door of this.doors) {
+      const saved = doors.get(door.id);
+      if (!saved) continue;
+      door.open = saved.open;
+      door.locked = saved.locked;
+      door.breached = saved.breached;
+      door.hp = saved.hp;
+      this.applyDoorVisual(door);
+    }
+    const containers = new Map(data.containers.map((container) => [container.id, container]));
+    for (const container of this.containers) {
+      const saved = containers.get(container.id);
+      if (!saved) continue;
+      container.opened = saved.opened;
+      container.searched = saved.searched;
+      container.locked = saved.locked;
+      container.items = new Map(saved.items);
+      this.applyContainerVisual(container);
+    }
+    for (const object of this.placedObjects) this.scene.remove(object.group);
+    this.placedObjects = [];
+    for (const saved of data.placedObjects ?? []) this.placeObject(saved.kind, new THREE.Vector3(saved.position.x, saved.position.y, saved.position.z), saved.yaw, saved.id, saved.hp, saved.items);
+    for (const event of this.events) this.scene.remove(event.group);
+    this.events = [];
+    for (const saved of data.dynamicEvents ?? []) this.spawnEvent(saved.kind, new THREE.Vector3(saved.position.x, 0, saved.position.z), saved);
+    for (const horde of this.hordes) this.scene.remove(horde.group);
+    this.hordes = [];
+    for (const saved of data.hordes ?? []) this.spawnHorde(new THREE.Vector3(saved.position.x, 0, saved.position.z), saved);
+    this.discoveredHints = new Set(data.discoveredHints ?? []);
+  }
+
+  private createStaticObjects() {
+    this.addDoor('door-house-01', 'Haustür', 'house', -78, -27.7, false);
+    this.addDoor('door-house-02', 'Verschlossene Haustür', 'house', -58, -47.7, true);
+    this.addDoor('door-market-back', 'Metall-Hintertür', 'metal', 18, -35.4, true);
+    this.addDoor('door-police-front', 'Polizeitür', 'police', 34, 40.1, true);
+    this.addDoor('door-clinic-front', 'Kliniktür', 'metal', -8, 79.1, false);
+    this.addDoor('door-clinic-med', 'Klinik-Medizintür', 'police', -2, 67.5, true);
+    this.addDoor('door-military-gate', 'Militär-Tor', 'military', 118, 23.2, true);
+    this.addContainer('cont-house-fridge', 'Kühlschrank', 'fridge', -79, -32, false);
+    this.addContainer('cont-house-cabinet', 'Schrank', 'cabinet', -56, -53, false);
+    this.addContainer('cont-market-fridge', 'Getränkekühler', 'fridge', 14, -44, false);
+    this.addContainer('cont-police-gun', 'Waffenschrank', 'weapon_cabinet', 37, 32, true);
+    this.addContainer('cont-police-locker', 'Polizeispind', 'locker', 30, 31, false);
+    this.addContainer('cont-clinic-med', 'Medizinschrank', 'medical_cabinet', -12, 70, true);
+    this.addContainer('cont-workshop-tools', 'Werkzeugkiste', 'toolbox', 63, -57, false);
+    this.addContainer('cont-military-crate', 'Militärkiste', 'military_crate', 127, 18, true);
+    this.addContainer('cont-trash-road', 'Mülltonne', 'trash', -12, 4, false);
+    this.addVehicle('veh-car-01', 'Verlassenes Auto', 'car', -18, 5);
+    this.addVehicle('veh-police-01', 'Polizeiauto', 'police_car', 42, 22);
+    this.addVehicle('veh-ambulance-01', 'Krankenwagen', 'ambulance', -22, 78);
+    this.addVehicle('veh-military-01', 'Militärfahrzeug', 'military_truck', 138, 30);
+    this.addVehicle('veh-van-01', 'Lieferwagen', 'van', 88, -70);
+  }
+
+  private addDoor(id: string, name: string, kind: DoorKind, x: number, z: number, locked: boolean) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(kind === 'military' ? 3.6 : 2.2, 2.4, 0.18), new THREE.MeshStandardMaterial({ color: locked ? 0x4a332f : 0x3a3228, roughness: 0.9 }));
+    mesh.position.set(x, 1.2, z);
+    mesh.userData.persistentType = 'door';
+    mesh.userData.id = id;
+    this.scene.add(mesh);
+    this.doors.push({ id, kind, name, mesh, open: false, locked, breached: false, hp: kind === 'military' ? 130 : kind === 'metal' || kind === 'police' ? 90 : 55 });
+  }
+
+  private addContainer(id: string, name: string, kind: ContainerKind, x: number, z: number, locked: boolean, poolOverride?: string) {
+    const color = locked ? 0x594230 : kind.includes('medical') ? 0xd8ddd9 : kind.includes('military') ? 0x374c32 : kind.includes('weapon') ? 0x4e4c42 : 0x66583d;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 0.9), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+    mesh.position.set(x, 0.45, z);
+    mesh.userData.persistentType = 'container';
+    mesh.userData.id = id;
+    this.scene.add(mesh);
+    const container = { id, kind, name, mesh, opened: false, searched: false, locked, items: this.rollContainerItems(kind, poolOverride) };
+    this.containers.push(container);
+  }
+
+  private addVehicle(id: string, name: string, kind: VehicleKind, x: number, z: number) {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(4, 1.2, 2), new THREE.MeshStandardMaterial({ color: kind === 'ambulance' ? 0xaaa9a1 : kind === 'police_car' ? 0x26384e : kind === 'military_truck' ? 0x374733 : 0x343735, roughness: 0.95 }));
+    body.position.set(x, 0.6, z);
+    this.scene.add(body);
+    this.addContainer(`${id}-trunk`, `${name} Kofferraum`, 'vehicle_trunk', x + 1.5, z, kind === 'police_car' || kind === 'military_truck', VEHICLE_LOOT[kind]);
+  }
+
+  private rollContainerItems(kind: ContainerKind, poolOverride?: string) {
+    const items = new Map<string, number>();
+    const rule = CONTAINER_LOOT[kind];
+    const poolId = poolOverride ?? rule.pool;
+    if (Math.random() > rule.chance) return items;
+    const pool = LOOT_POOLS[poolId] ?? [];
+    const rolls = kind === 'military_crate' || kind === 'weapon_cabinet' ? 3 : kind === 'storage_box' ? 0 : 2;
+    for (let i = 0; i < rolls; i += 1) {
+      const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
+      let cursor = Math.random() * total;
+      for (const entry of pool) {
+        cursor -= entry.weight;
+        if (cursor <= 0) {
+          addItems(items, entry.itemId, randomInt(entry.minCount ?? 1, entry.maxCount ?? 1));
+          break;
+        }
+      }
+    }
+    return items;
+  }
+
+  private interactDoor(door: DoorObject, inventory: Inventory): WorldAction | string {
+    if (door.breached) { door.open = !door.open; this.applyDoorVisual(door); return door.open ? `${door.name} aufgestoßen.` : `${door.name} geschlossen.`; }
+    if (!door.locked) { door.open = !door.open; this.applyDoorVisual(door); return door.open ? `${door.name} geöffnet.` : `${door.name} geschlossen.`; }
+    const key = this.keyForDoor(door);
+    if (key && inventory.has(key)) {
+      door.locked = false;
+      door.open = true;
+      this.applyDoorVisual(door);
+      return `${door.name} mit ${ITEMS[key].name} aufgeschlossen.`;
+    }
+    if (inventory.has('lockpick')) return { label: `Dietrich: ${door.name}`, duration: BALANCE.access.lockpickSeconds, noiseRadius: 5, complete: () => this.finishLockpick(door, inventory) };
+    if (inventory.has('crowbar') || inventory.has('hatchet') || inventory.has('toolbox')) return { label: `Aufbrechen: ${door.name}`, duration: this.doorBreakSeconds(door.kind), noiseRadius: door.kind === 'metal' || door.kind === 'military' ? BALANCE.access.metalDoorNoiseRadius : BALANCE.access.doorBreakNoiseRadius, complete: () => { door.locked = false; door.breached = true; door.open = true; this.applyDoorVisual(door); return `${door.name} laut aufgebrochen. Zombies könnten reagieren.`; } };
+    return `Zugriff verweigert: ${door.name} ist abgeschlossen. Schlüssel, Dietrich, Brecheisen oder Werkzeug nötig.`;
+  }
+
+  private interactContainer(container: ContainerObject, inventory: Inventory): WorldAction | string {
+    if (container.locked) {
+      const key = container.kind === 'military_crate' ? 'military_keycard' : container.kind === 'medical_cabinet' ? 'clinic_key' : container.kind === 'weapon_cabinet' ? 'police_key' : null;
+      if (key && inventory.has(key)) { container.locked = false; this.applyContainerVisual(container); return `${container.name} mit ${ITEMS[key].name} geöffnet.`; }
+      if (inventory.has('lockpick')) return { label: `Dietrich: ${container.name}`, duration: BALANCE.access.lockpickSeconds, noiseRadius: 4, complete: () => this.finishContainerLockpick(container, inventory) };
+      if (inventory.has('crowbar') || inventory.has('toolbox')) return { label: `Aufbrechen: ${container.name}`, duration: BALANCE.access.lockedContainerBreakSeconds, noiseRadius: BALANCE.access.containerBreakNoiseRadius, complete: () => { container.locked = false; container.opened = true; this.applyContainerVisual(container); return `${container.name} aufgebrochen.`; } };
+      return `${container.name} ist verschlossen. Schlüssel, Dietrich oder Brecheisen nötig.`;
+    }
+    return { label: `Durchsuchen: ${container.name}`, duration: BALANCE.access.containerSearchSeconds, noiseRadius: 4, complete: () => this.lootContainer(container, inventory) };
+  }
+
+  private lootContainer(container: ContainerObject, inventory: Inventory) {
+    container.opened = true;
+    container.searched = true;
+    this.applyContainerVisual(container);
+    const first = [...container.items.entries()][0];
+    if (!first) return `${container.name} ist leer.`;
+    const [itemId, count] = first;
+    if (!inventory.add(itemId, count)) return `Inventar voll. ${ITEMS[itemId]?.name ?? itemId} bleibt in ${container.name}.`;
+    container.items.delete(itemId);
+    this.discoveredHints.add(container.id);
+    return `${container.name}: ${ITEMS[itemId]?.name ?? itemId}${count > 1 ? ` x${count}` : ''} gefunden.`;
+  }
+
+  private finishLockpick(door: DoorObject, inventory: Inventory) {
+    if (Math.random() < BALANCE.access.lockpickBreakChance) inventory.remove('lockpick', 1);
+    if (Math.random() < BALANCE.access.lockpickSuccessChance) { door.locked = false; door.open = true; this.applyDoorVisual(door); return `${door.name} mit Dietrich geöffnet.`; }
+    return `Dietrich-Versuch an ${door.name} fehlgeschlagen.`;
+  }
+
+  private finishContainerLockpick(container: ContainerObject, inventory: Inventory) {
+    if (Math.random() < BALANCE.access.lockpickBreakChance) inventory.remove('lockpick', 1);
+    if (Math.random() < BALANCE.access.lockpickSuccessChance) { container.locked = false; container.opened = true; this.applyContainerVisual(container); return `${container.name} mit Dietrich geöffnet.`; }
+    return `Dietrich-Versuch an ${container.name} fehlgeschlagen.`;
+  }
+
+  private keyForDoor(door: DoorObject) { if (door.kind === 'house') return 'simple_key'; if (door.kind === 'police') return 'police_key'; if (door.kind === 'military') return 'military_keycard'; return null; }
+  private doorBreakSeconds(kind: DoorKind) { if (kind === 'military') return BALANCE.access.militaryBreakSeconds; if (kind === 'police') return BALANCE.access.policeBreakSeconds; if (kind === 'metal') return BALANCE.access.metalBreakSeconds; if (kind === 'interior') return BALANCE.access.interiorBreakSeconds; return BALANCE.access.houseBreakSeconds; }
+  private get selectedBuildable() { return BUILDABLES[this.selectedBuildableIndex]; }
+
+  private missingBuildMaterials(inventory: Inventory, kind: BuildableKind) {
+    const costs = BALANCE.building.costs[kind];
+    return Object.entries(costs).filter(([itemId, count]) => !inventory.has(itemId, count)).map(([itemId, count]) => `${ITEMS[itemId]?.name ?? itemId} x${count}`);
+  }
+
+  private consumeBuildMaterials(inventory: Inventory, kind: BuildableKind) { for (const [itemId, count] of Object.entries(BALANCE.building.costs[kind])) inventory.remove(itemId, count); }
+
+  private placeObject(kind: BuildableKind, position: THREE.Vector3, yaw: number, id = `placed-${Date.now()}-${Math.floor(Math.random() * 9999)}`, hp = this.hpForBuildable(kind), savedItems?: Array<[string, number]>) {
+    const group = new THREE.Group();
+    group.position.copy(position);
+    group.rotation.y = yaw;
+    const dimensions = kind === 'storage_box' ? [1.7, 0.9, 1] : kind === 'sleeping_bag' ? [2, 0.12, 0.8] : kind === 'barricade' ? [2.4, 1.2, 0.35] : [3, 2.1, 0.35];
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(dimensions[0], dimensions[1], dimensions[2]), new THREE.MeshStandardMaterial({ color: kind === 'storage_box' ? 0x715732 : kind === 'sleeping_bag' ? 0x3d5f4c : 0x5a4328, roughness: 0.95 }));
+    mesh.position.y = dimensions[1] / 2;
+    mesh.userData.persistentType = kind === 'storage_box' ? 'storage' : 'placed';
+    mesh.userData.id = id;
+    group.add(mesh);
+    this.scene.add(group);
+    this.placedObjects.push({ id, kind, name: BUILDABLE_LABELS[kind], group, hp, items: kind === 'storage_box' ? new Map(savedItems ?? []) : undefined });
+  }
+
+  private hpForBuildable(kind: BuildableKind) { return kind === 'wood_wall' ? BALANCE.building.woodWallHp : kind === 'wood_gate' ? BALANCE.building.woodGateHp : kind === 'barricade' ? BALANCE.building.barricadeHp : kind === 'storage_box' ? BALANCE.building.storageBoxHp : kind === 'sleeping_bag' ? BALANCE.building.sleepingBagHp : BALANCE.building.fenceSegmentHp; }
+
+  private spawnInitialEvent() { this.spawnEvent('smoke_signal', new THREE.Vector3(-126, 0, 104)); }
+  private spawnRandomEvent() { const candidates: DynamicEventKind[] = ['helicopter_crash', 'military_convoy', 'rare_crate', 'building_alarm']; this.spawnEvent(candidates[Math.floor(Math.random() * candidates.length)], new THREE.Vector3(-120 + Math.random() * 240, 0, -120 + Math.random() * 240)); }
+
+  private spawnEvent(kind: DynamicEventKind, position: THREE.Vector3, saved?: DynamicEventSaveData) {
+    const group = new THREE.Group();
+    group.position.copy(position);
+    const color = kind === 'smoke_signal' ? 0xaaaaaa : kind === 'helicopter_crash' ? 0x2b2b2b : kind === 'military_convoy' ? 0x334a30 : 0x6d5733;
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.8, 2), new THREE.MeshStandardMaterial({ color, roughness: 1 }));
+    marker.position.y = 0.4;
+    group.add(marker);
+    if (kind === 'smoke_signal' || kind === 'helicopter_crash') {
+      const smoke = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 1.3, 8, 8), new THREE.MeshBasicMaterial({ color: 0x777777, transparent: true, opacity: 0.22 }));
+      smoke.position.y = 4.4;
+      group.add(smoke);
+    }
+    this.scene.add(group);
+    const id = saved?.id ?? `event-${kind}-${Date.now()}-${Math.floor(Math.random() * 999)}`;
+    const containerMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1), new THREE.MeshStandardMaterial({ color: 0x6f5a34, roughness: 0.85 }));
+    containerMesh.position.set(position.x + 1.8, 0.4, position.z);
+    containerMesh.userData.persistentType = 'container';
+    containerMesh.userData.id = `${id}-crate`;
+    this.scene.add(containerMesh);
+    const container: ContainerObject = { id: `${id}-crate`, kind: 'military_crate', name: `${this.eventName(kind)} Kiste`, mesh: containerMesh, opened: false, searched: saved?.searched ?? false, locked: kind !== 'smoke_signal', items: this.rollContainerItems(kind === 'rare_crate' ? 'military_crate' : 'vehicle_trunk', kind === 'smoke_signal' ? 'hospital_medical' : 'event_military') };
+    this.containers.push(container);
+    this.events.push({ id, kind, name: this.eventName(kind), group, container, active: saved?.active ?? true, discovered: saved?.discovered ?? false, searched: saved?.searched ?? false, timeRemaining: saved?.timeRemaining ?? BALANCE.events.eventDurationSeconds });
+    if (kind === 'building_alarm') this.discoveredHints.add('alarm-active');
+  }
+
+  private eventName(kind: DynamicEventKind) { return kind === 'helicopter_crash' ? 'Abgestürzter Helikopter' : kind === 'military_convoy' ? 'Verlassener Militärkonvoi' : kind === 'smoke_signal' ? 'Rauchsignal' : kind === 'building_alarm' ? 'Gebäudealarm' : 'Seltene Loot-Kiste'; }
+
+  private spawnHorde(position: THREE.Vector3, saved?: HordeSaveData) {
+    const group = new THREE.Group();
+    const size = saved?.size ?? BALANCE.horde.initialSize;
+    for (let i = 0; i < size; i += 1) {
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.8, 3, 6), new THREE.MeshStandardMaterial({ color: 0x4f574b, roughness: 1 }));
+      body.position.set((Math.random() - 0.5) * 5, 0.85, (Math.random() - 0.5) * 5);
+      group.add(body);
+    }
+    group.position.copy(position);
+    this.scene.add(group);
+    this.hordes.push({ id: saved?.id ?? `horde-${Date.now()}`, group, position: position.clone(), target: saved ? new THREE.Vector3(saved.target.x, 0, saved.target.z) : new THREE.Vector3(-position.x * 0.6, 0, -position.z * 0.6), size, active: saved?.active ?? true, attackCooldown: 0 });
+  }
+
+  private updateHorde(horde: HordeObject, delta: number, playerPosition: THREE.Vector3, noiseRadius: number, isNight: boolean, onHordeDamage: () => void) {
+    if (!horde.active) return;
+    horde.attackCooldown = Math.max(0, horde.attackCooldown - delta);
+    if (noiseRadius > 22 && horde.position.distanceTo(playerPosition) < BALANCE.horde.hearingRadius) horde.target.copy(playerPosition);
+    const direction = horde.target.clone().sub(horde.position); direction.y = 0;
+    if (direction.length() < 4) horde.target.set(-120 + Math.random() * 240, 0, -120 + Math.random() * 240);
+    else horde.position.addScaledVector(direction.normalize(), (BALANCE.horde.moveSpeed + (isNight ? BALANCE.horde.nightSpeedBonus : 0)) * delta);
+    horde.group.position.copy(horde.position);
+    if (horde.position.distanceTo(playerPosition) < 2.4 && horde.attackCooldown <= 0) { horde.attackCooldown = 1.2; onHordeDamage(); }
+  }
+
+  private updateHover(camera: THREE.Camera) {
+    this.hovered = null;
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const objects = [...this.doors.map((door) => door.mesh), ...this.containers.map((container) => container.mesh), ...this.placedObjects.flatMap((object) => object.group.children as THREE.Object3D[])];
+    const hit = this.raycaster.intersectObjects(objects, false).find((entry) => entry.distance <= 3.4);
+    if (!hit) return;
+    const object = hit.object;
+    if (object.userData.persistentType === 'door') this.hovered = { type: 'door', id: object.userData.id };
+    if (object.userData.persistentType === 'container') this.hovered = { type: 'container', id: object.userData.id };
+    if (object.userData.persistentType === 'storage') this.hovered = { type: 'storage', id: object.userData.id };
+  }
+
+  private prompt() {
+    if (!this.hovered) return this.buildMode ? `[P] ${BUILDABLE_LABELS[this.selectedBuildable]} platzieren · [N] Bauteil wechseln` : '';
+    if (this.hovered.type === 'door') { const door = this.doors.find((entry) => entry.id === this.hovered?.id); return door ? `[E] ${door.locked ? 'aufschließen/aufbrechen' : door.open ? 'schließen' : 'öffnen'}: ${door.name}` : ''; }
+    const container = this.containers.find((entry) => entry.id === this.hovered?.id); if (container) return `[E] ${container.locked ? 'öffnen/aufbrechen' : 'durchsuchen'}: ${container.name}`;
+    const storage = this.placedObjects.find((entry) => entry.id === this.hovered?.id); return storage ? `[E] Storage öffnen: ${storage.name}` : '';
+  }
+
+  private updateBuildPreview(camera: THREE.Camera, playerPosition: THREE.Vector3) {
+    this.preview.visible = this.buildMode;
+    if (!this.buildMode) return;
+    this.preview.position.copy(this.placementPosition(camera, playerPosition));
+    this.preview.rotation.y = (camera.rotation as THREE.Euler).y;
+  }
+
+  private placementPosition(camera: THREE.Camera, playerPosition: THREE.Vector3) { const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); direction.y = 0; direction.normalize(); return playerPosition.clone().addScaledVector(direction, BALANCE.building.placementDistance).setY(0); }
+
+  private locationName(playerPosition: THREE.Vector3) { const poi = POIS.find((entry) => Math.hypot(playerPosition.x - entry.x, playerPosition.z - entry.z) <= entry.radius); return poi?.name ?? 'Wildnis'; }
+  private eventHint(playerPosition: THREE.Vector3) { const event = this.events.find((entry) => entry.active && entry.discovered); if (event) return `Hinweis: ${event.name} in der Nähe. Risiko hoch, Loot möglich.`; if (this.discoveredHints.has('alarm-active')) return 'In der Ferne läuft ein Alarm. Zombies könnten angelockt werden.'; const nearSmoke = this.events.find((entry) => entry.active && playerPosition.distanceTo(entry.group.position) < 120); return nearSmoke ? 'Du siehst ein schwaches Signal am Horizont.' : 'Finde Karte, Kompass oder Notizen für bessere Orientierung.'; }
+  private compassHeading(camera: THREE.Camera) { const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); const angle = Math.atan2(forward.x, forward.z); const headings = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW']; return headings[Math.round(((angle + Math.PI) / (Math.PI * 2)) * 8) % 8]; }
+  private activeStorage() { if (!this.storageId) return null; return this.placedObjects.find((entry) => entry.id === this.storageId && entry.items) ?? null; }
+  private activeStorageCapacity() { return this.activeStorage() ? BALANCE.storage.storageBoxCapacity : 0; }
+  private applyDoorVisual(door: DoorObject) { door.mesh.rotation.y = door.open ? Math.PI / 2 : 0; const material = door.mesh.material; if (material instanceof THREE.MeshStandardMaterial) material.color.set(door.breached ? 0x57321f : door.locked ? 0x4a332f : 0x3a3228); }
+  private applyContainerVisual(container: ContainerObject) { const material = container.mesh.material; if (material instanceof THREE.MeshStandardMaterial) material.color.set(container.searched ? 0x27251f : container.locked ? 0x594230 : 0x66583d); }
+}
