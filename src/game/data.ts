@@ -1,4 +1,4 @@
-import type { BuildingType, ItemDefinition, LootPoolEntry, LootSpotDefinition } from './types';
+import type { BuildingType, ContainerKind, ItemDefinition, LootPoolEntry, LootSpotDefinition, VehicleKind } from './types';
 
 export const ITEMS: Record<string, ItemDefinition> = {
   canned_food: { id: 'canned_food', name: 'Konservendose', type: 'food', size: 1, weight: 0.45, maxStack: 4, description: 'Haltbare Nahrung. Optional später mit Dosenöffner-Logik.', nutrition: 30 },
@@ -7,14 +7,12 @@ export const ITEMS: Record<string, ItemDefinition> = {
   energy_bar: { id: 'energy_bar', name: 'Energieriegel', type: 'food', size: 0.5, weight: 0.12, maxStack: 8, description: 'Kleine schnelle Kalorien für unterwegs.', nutrition: 18 },
   apple: { id: 'apple', name: 'Apfel', type: 'food', size: 0.5, weight: 0.18, maxStack: 5, description: 'Frisches Obst. Kann altern und verderben.', nutrition: 16, spoiledFoodRisk: 0.08 },
   rotten_food: { id: 'rotten_food', name: 'Verdorbene Nahrung', type: 'food', size: 1, weight: 0.3, maxStack: 3, description: 'Riecht schlecht. Essen kann krank machen.', nutrition: 8, spoiledFoodRisk: 0.46 },
-
   water_bottle: { id: 'water_bottle', name: 'Wasserflasche', type: 'drink', size: 1, weight: 0.7, maxStack: 4, description: 'Sauberes Trinkwasser. In dieser Welt sehr wertvoll.', hydration: 34 },
   canteen: { id: 'canteen', name: 'Feldflasche', type: 'drink', size: 1, weight: 0.9, maxStack: 2, description: 'Robuste Feldflasche mit sauberem Wasser.', hydration: 42 },
   dirty_water: { id: 'dirty_water', name: 'Schmutziges Wasser', type: 'drink', size: 1, weight: 0.7, maxStack: 4, description: 'Stillt Durst, kann aber krank machen.', hydration: 28, dirtyWaterRisk: 0.38 },
   clean_water: { id: 'clean_water', name: 'Abgekochtes Wasser', type: 'drink', size: 1, weight: 0.7, maxStack: 4, description: 'Sicheres Wasser. Durch Crafting vorbereitet.', hydration: 36 },
   soda: { id: 'soda', name: 'Limonade', type: 'drink', size: 1, weight: 0.45, maxStack: 4, description: 'Stillt Durst etwas und liefert Zucker.', hydration: 20, nutrition: 5 },
   sports_drink: { id: 'sports_drink', name: 'Isodrink', type: 'drink', size: 1, weight: 0.55, maxStack: 3, description: 'Gleicht Durst aus und hilft nach langen Märschen.', hydration: 28 },
-
   bandage: { id: 'bandage', name: 'Verband', type: 'medical', size: 1, weight: 0.12, maxStack: 6, description: 'Stoppt Blutungen und stabilisiert leichte Wunden.', heal: 6, stopsBleeding: true },
   rag: { id: 'rag', name: 'Lumpen', type: 'tool', size: 0.25, weight: 0.05, maxStack: 12, description: 'Rohstoff für improvisierte Verbände und Fackeln.', repairTags: ['cloth'] },
   improvised_bandage: { id: 'improvised_bandage', name: 'Lumpenverband', type: 'medical', size: 0.5, weight: 0.08, maxStack: 6, description: 'Stoppt Blutung, kann aber Infektionsrisiko erhöhen.', heal: 2, stopsBleeding: true, infectionRisk: 0.2 },
@@ -23,16 +21,14 @@ export const ITEMS: Record<string, ItemDefinition> = {
   antibiotics: { id: 'antibiotics', name: 'Antibiotika', type: 'medical', size: 1, weight: 0.12, maxStack: 2, description: 'Behandelt Infektion und Krankheit.', heal: 4, infectionRelief: 34, illnessRelief: 34 },
   blood_bag: { id: 'blood_bag', name: 'Blutbeutel', type: 'medical', size: 1, weight: 0.65, maxStack: 2, description: 'Starker medizinischer Gegenstand. Stoppt Blutung und gibt HP zurück.', heal: 34, stopsBleeding: true },
   saline: { id: 'saline', name: 'Kochsalzlösung', type: 'medical', size: 1, weight: 0.6, maxStack: 2, description: 'Für spätere Bewusstlosigkeits-/Blutverlustsysteme vorbereitet.', heal: 12 },
-
   kitchen_knife: { id: 'kitchen_knife', name: 'Küchenmesser', type: 'melee_weapon', size: 1, weight: 0.35, maxStack: 1, description: 'Kurze Nahkampfwaffe. Leise, aber riskant.', repairTags: ['weapon'], weapon: { kind: 'melee', damage: 24, range: 2.0, noiseRadius: 3, fireRate: 72, malfunctionBaseChance: 0.01 } },
-  crowbar: { id: 'crowbar', name: 'Brechstange', type: 'melee_weapon', size: 2, weight: 2.4, maxStack: 1, description: 'Schwere Nahkampfwaffe und später nützlich für Türen.', repairTags: ['tool', 'weapon'], weapon: { kind: 'melee', damage: 38, range: 2.25, noiseRadius: 5, fireRate: 52, malfunctionBaseChance: 0 } },
-  hatchet: { id: 'hatchet', name: 'Beil', type: 'melee_weapon', size: 2, weight: 1.4, maxStack: 1, description: 'Gefährlich im Nahkampf, aber langsam.', repairTags: ['tool', 'weapon'], weapon: { kind: 'melee', damage: 46, range: 2.1, noiseRadius: 5, fireRate: 42, malfunctionBaseChance: 0.01 } },
+  crowbar: { id: 'crowbar', name: 'Brechstange', type: 'melee_weapon', size: 2, weight: 2.4, maxStack: 1, description: 'Schwere Nahkampfwaffe, kann Türen/Kisten aufbrechen.', repairTags: ['tool', 'weapon'], weapon: { kind: 'melee', damage: 38, range: 2.25, noiseRadius: 5, fireRate: 52, malfunctionBaseChance: 0 } },
+  hatchet: { id: 'hatchet', name: 'Beil', type: 'melee_weapon', size: 2, weight: 1.4, maxStack: 1, description: 'Gefährlich im Nahkampf, zum Bauen und Aufbrechen nützlich.', repairTags: ['tool', 'weapon'], weapon: { kind: 'melee', damage: 46, range: 2.1, noiseRadius: 5, fireRate: 42, malfunctionBaseChance: 0.01 } },
   wooden_spear: { id: 'wooden_spear', name: 'Holzspeer', type: 'melee_weapon', size: 2, weight: 1.1, maxStack: 1, description: 'Gute Reichweite, aber geringe Haltbarkeit.', repairTags: ['tool'], weapon: { kind: 'melee', damage: 30, range: 3.0, noiseRadius: 4, fireRate: 44, malfunctionBaseChance: 0.04 } },
   pistol: { id: 'pistol', name: 'Abgenutzte Pistole', type: 'ranged_weapon', size: 2, weight: 1.0, maxStack: 1, description: 'Handlich, laut und nur mit 9mm Munition sinnvoll.', repairTags: ['weapon'], weapon: { kind: 'ranged', damage: 45, range: 46, noiseRadius: 42, fireRate: 260, recoil: 0.28, malfunctionBaseChance: 0.04, ammoType: 'ammo_9mm', magazineSize: 12, reloadTime: 1.45 } },
   rifle: { id: 'rifle', name: 'Altes Gewehr', type: 'ranged_weapon', size: 4, weight: 3.5, maxStack: 1, description: 'Hohe Reichweite und Schaden. Jeder Schuss kann eine Horde anziehen.', repairTags: ['weapon'], weapon: { kind: 'ranged', damage: 82, range: 80, noiseRadius: 62, fireRate: 90, recoil: 0.5, malfunctionBaseChance: 0.05, ammoType: 'ammo_556', magazineSize: 5, reloadTime: 2.2 } },
   ammo_9mm: { id: 'ammo_9mm', name: '9mm Patrone', type: 'ammo', size: 0.15, weight: 0.012, maxStack: 60, description: 'Munition für Pistolen.' },
   ammo_556: { id: 'ammo_556', name: '5.56 Patrone', type: 'ammo', size: 0.2, weight: 0.014, maxStack: 40, description: 'Munition für Gewehre.' },
-
   tshirt: { id: 'tshirt', name: 'T-Shirt', type: 'clothing', size: 1, weight: 0.25, maxStack: 1, description: 'Kaum Schutz, kaum Wärme.', armor: 0.02, warmth: 2, rainProtection: 0, clothingSlot: 'torso', repairTags: ['cloth'] },
   hoodie: { id: 'hoodie', name: 'Dicker Hoodie', type: 'clothing', size: 2, weight: 0.8, maxStack: 1, description: 'Etwas Wärme, kaum Regenschutz.', armor: 0.08, warmth: 9, rainProtection: 4, clothingSlot: 'torso', repairTags: ['cloth'] },
   work_jacket: { id: 'work_jacket', name: 'Arbeitsjacke', type: 'clothing', size: 2, weight: 1.4, maxStack: 1, description: 'Robuste Kleidung mit Wärme und leichtem Regenschutz.', armor: 0.12, warmth: 12, rainProtection: 12, clothingSlot: 'torso', repairTags: ['cloth', 'leather'] },
@@ -49,98 +45,63 @@ export const ITEMS: Record<string, ItemDefinition> = {
   hiking_backpack: { id: 'hiking_backpack', name: 'Wanderrucksack', type: 'backpack', size: 2, weight: 1.6, maxStack: 1, description: 'Guter Rucksack für lange Lootrunden.', capacityBonus: 16, rainProtection: 6, clothingSlot: 'backpack', repairTags: ['backpack', 'cloth'] },
   field_pack: { id: 'field_pack', name: 'Großer Militärrucksack', type: 'backpack', size: 3, weight: 2.4, maxStack: 1, description: 'Sehr viel Stauraum. In Militärbereichen am wahrscheinlichsten.', capacityBonus: 24, rainProtection: 10, clothingSlot: 'backpack', repairTags: ['backpack', 'cloth'] },
   improvised_backpack: { id: 'improvised_backpack', name: 'Improvisierter Rucksack', type: 'backpack', size: 2, weight: 1.2, maxStack: 1, description: 'Gecrafteter Notfallrucksack aus Sack und Seil.', capacityBonus: 10, rainProtection: 1, clothingSlot: 'backpack', repairTags: ['backpack', 'cloth'] },
-
-  radio: { id: 'radio', name: 'Funkgerät', type: 'tool', size: 1, weight: 0.55, maxStack: 1, description: 'Werkzeug/Story-Gegenstand für spätere Systeme.' },
+  radio: { id: 'radio', name: 'Funkgerät', type: 'tool', size: 1, weight: 0.55, maxStack: 1, description: 'Kann Hinweise und Notrufe empfangen.' },
+  map: { id: 'map', name: 'Zerknitterte Karte', type: 'tool', size: 0.5, weight: 0.05, maxStack: 1, description: 'Schaltet die einfache Orientierungskarte frei.' },
+  compass: { id: 'compass', name: 'Kompass', type: 'tool', size: 0.5, weight: 0.12, maxStack: 1, description: 'Zeigt Himmelsrichtungen in der UI.' },
+  simple_key: { id: 'simple_key', name: 'Einfacher Schlüssel', type: 'tool', size: 0.2, weight: 0.03, maxStack: 3, description: 'Öffnet manche normale Türen.', accessKey: 'house' },
+  police_key: { id: 'police_key', name: 'Polizeischlüssel', type: 'tool', size: 0.2, weight: 0.04, maxStack: 2, description: 'Öffnet verschlossene Türen in der Polizeistation.', accessKey: 'police' },
+  clinic_key: { id: 'clinic_key', name: 'Klinikschlüssel', type: 'tool', size: 0.2, weight: 0.04, maxStack: 2, description: 'Öffnet Klinikbereiche und Medizinschränke.', accessKey: 'hospital' },
+  military_keycard: { id: 'military_keycard', name: 'Militär-Zugangskarte', type: 'tool', size: 0.2, weight: 0.03, maxStack: 1, description: 'Seltene Karte für militärische Türen/Kisten.', accessKey: 'military' },
+  lockpick: { id: 'lockpick', name: 'Dietrich', type: 'tool', size: 0.2, weight: 0.02, maxStack: 8, description: 'Kann Schlösser öffnen, kann aber brechen.' },
+  nails: { id: 'nails', name: 'Nägel', type: 'tool', size: 0.4, weight: 0.18, maxStack: 20, description: 'Baumaterial für Barrikaden, Wände und Kisten.' },
+  hammer: { id: 'hammer', name: 'Hammer', type: 'tool', size: 1, weight: 0.8, maxStack: 1, description: 'Werkzeug für Basebuilding.' },
+  saw: { id: 'saw', name: 'Säge', type: 'tool', size: 2, weight: 1.1, maxStack: 1, description: 'Für späteres erweitertes Bauen vorbereitet.' },
+  metal_parts: { id: 'metal_parts', name: 'Metallteile', type: 'tool', size: 1, weight: 0.9, maxStack: 8, description: 'Robustes Baumaterial und Reparaturrohstoff.' },
   duct_tape: { id: 'duct_tape', name: 'Panzertape', type: 'tool', size: 1, weight: 0.25, maxStack: 4, description: 'Reparaturmaterial für einfache Reparaturen.', repairTags: ['cloth', 'tool', 'backpack'] },
   sewing_kit: { id: 'sewing_kit', name: 'Nähset', type: 'tool', size: 1, weight: 0.2, maxStack: 2, description: 'Repariert Kleidung und einfache Rucksäcke.', repairTags: ['cloth'] },
-  toolbox: { id: 'toolbox', name: 'Werkzeugkasten', type: 'tool', size: 3, weight: 3.8, maxStack: 1, description: 'Repariert Werkzeuge und Nahkampfwaffen.', repairTags: ['tool'] },
+  toolbox: { id: 'toolbox', name: 'Werkzeugkasten', type: 'tool', size: 3, weight: 3.8, maxStack: 1, description: 'Repariert Werkzeuge, Nahkampfwaffen und hilft bei Metalltüren.', repairTags: ['tool'] },
   weapon_cleaning_kit: { id: 'weapon_cleaning_kit', name: 'Waffenreinigungsset', type: 'tool', size: 1, weight: 0.45, maxStack: 2, description: 'Verbessert den Zustand von Schusswaffen.', repairTags: ['weapon'] },
   wrench: { id: 'wrench', name: 'Schraubenschlüssel', type: 'tool', size: 1, weight: 0.8, maxStack: 1, description: 'Werkzeug und improvisierte Waffe für spätere Systeme.', repairTags: ['tool'] },
   scrap_parts: { id: 'scrap_parts', name: 'Ersatzteile', type: 'tool', size: 1, weight: 0.35, maxStack: 8, description: 'Reparaturmaterial. Wird später für Waffen- und Ausrüstungszustand genutzt.' },
   stick: { id: 'stick', name: 'Stock', type: 'tool', size: 1, weight: 0.45, maxStack: 6, description: 'Einfaches Holzstück für Crafting.' },
-  firewood: { id: 'firewood', name: 'Feuerholz', type: 'tool', size: 2, weight: 1.8, maxStack: 5, description: 'Brennstoff für Lagerfeuer.' },
+  firewood: { id: 'firewood', name: 'Holz', type: 'tool', size: 2, weight: 1.8, maxStack: 8, description: 'Brennstoff und Baumaterial.' },
   matches: { id: 'matches', name: 'Streichhölzer', type: 'tool', size: 0.5, weight: 0.05, maxStack: 3, description: 'Kann Feuer entzünden.' },
   lighter: { id: 'lighter', name: 'Feuerzeug', type: 'tool', size: 0.5, weight: 0.08, maxStack: 2, description: 'Zuverlässiger als Streichhölzer. Nutzt sich später ab.' },
   burlap_sack: { id: 'burlap_sack', name: 'Jutesack', type: 'tool', size: 1, weight: 0.35, maxStack: 3, description: 'Rohstoff für improvisierten Rucksack.' },
-  rope: { id: 'rope', name: 'Seil', type: 'tool', size: 1, weight: 0.65, maxStack: 3, description: 'Rohstoff für Crafting.' },
+  rope: { id: 'rope', name: 'Seil', type: 'tool', size: 1, weight: 0.65, maxStack: 3, description: 'Rohstoff für Crafting und Basebuilding.' },
   torch: { id: 'torch', name: 'Einfache Fackel', type: 'tool', size: 2, weight: 0.8, maxStack: 1, description: 'Vorbereitet für spätere tragbare Lichtquelle.' },
-  campfire_kit: { id: 'campfire_kit', name: 'Lagerfeuer-Set', type: 'tool', size: 3, weight: 2.4, maxStack: 1, description: 'Kann platziert und angezündet werden.' }
+  campfire_kit: { id: 'campfire_kit', name: 'Lagerfeuer-Set', type: 'tool', size: 3, weight: 2.4, maxStack: 1, description: 'Kann platziert und angezündet werden.' },
+  note_hospital: { id: 'note_hospital', name: 'Notizzettel: Klinik', type: 'tool', size: 0.1, weight: 0.01, maxStack: 1, description: 'Hinweis: In der Klinik soll noch Antibiotika liegen.' },
+  note_convoy: { id: 'note_convoy', name: 'Notizzettel: Konvoi', type: 'tool', size: 0.1, weight: 0.01, maxStack: 1, description: 'Hinweis: Ein verlassener Militärkonvoi wurde östlich der Straße gesehen.' }
 };
 
 export const LOOT_POOLS: Record<string, LootPoolEntry[]> = {
-  residential_common: [
-    { itemId: 'canned_food', weight: 11 }, { itemId: 'crackers', weight: 10 }, { itemId: 'apple', weight: 7 }, { itemId: 'water_bottle', weight: 10 },
-    { itemId: 'dirty_water', weight: 4 }, { itemId: 'tshirt', weight: 8 }, { itemId: 'hoodie', weight: 7 }, { itemId: 'bandage', weight: 4 },
-    { itemId: 'energy_bar', weight: 5 }, { itemId: 'soda', weight: 4 }, { itemId: 'matches', weight: 3 }
-  ],
-  residential_rare: [
-    { itemId: 'kitchen_knife', weight: 8 }, { itemId: 'small_backpack', weight: 5 }, { itemId: 'work_jacket', weight: 5 }, { itemId: 'rain_jacket', weight: 3 },
-    { itemId: 'painkillers', weight: 3 }, { itemId: 'sewing_kit', weight: 3 }, { itemId: 'rope', weight: 2 }, { itemId: 'ammo_9mm', weight: 1, minCount: 2, maxCount: 4 }
-  ],
-  supermarket_food: [
-    { itemId: 'canned_food', weight: 18 }, { itemId: 'beans', weight: 16 }, { itemId: 'crackers', weight: 16 }, { itemId: 'energy_bar', weight: 12 },
-    { itemId: 'apple', weight: 10 }, { itemId: 'rotten_food', weight: 5 }, { itemId: 'water_bottle', weight: 18 }, { itemId: 'soda', weight: 14 },
-    { itemId: 'sports_drink', weight: 8 }, { itemId: 'bandage', weight: 2 }
-  ],
-  police_weapons: [
-    { itemId: 'pistol', weight: 7 }, { itemId: 'tactical_vest', weight: 5 }, { itemId: 'motorcycle_helmet', weight: 4 }, { itemId: 'radio', weight: 8 },
-    { itemId: 'bandage', weight: 4 }, { itemId: 'painkillers', weight: 3 }
-  ],
-  police_ammo: [
-    { itemId: 'ammo_9mm', weight: 24, minCount: 3, maxCount: 8 }, { itemId: 'pistol', weight: 2 }, { itemId: 'tactical_vest', weight: 2 }, { itemId: 'water_bottle', weight: 4 }
-  ],
-  military_weapons: [
-    { itemId: 'rifle', weight: 6 }, { itemId: 'pistol', weight: 4 }, { itemId: 'ammo_556', weight: 16, minCount: 3, maxCount: 8 }, { itemId: 'ammo_9mm', weight: 8, minCount: 3, maxCount: 8 },
-    { itemId: 'weapon_cleaning_kit', weight: 4 }
-  ],
-  military_armor: [
-    { itemId: 'plate_carrier', weight: 6 }, { itemId: 'tactical_vest', weight: 8 }, { itemId: 'military_helmet', weight: 6 }, { itemId: 'military_pants', weight: 6 },
-    { itemId: 'field_pack', weight: 5 }, { itemId: 'hiking_backpack', weight: 4 }, { itemId: 'bandage', weight: 5 }
-  ],
-  hospital_medical: [
-    { itemId: 'bandage', weight: 18 }, { itemId: 'improvised_bandage', weight: 6 }, { itemId: 'disinfectant', weight: 10 }, { itemId: 'painkillers', weight: 12 },
-    { itemId: 'blood_bag', weight: 6 }, { itemId: 'saline', weight: 6 }, { itemId: 'antibiotics', weight: 5 }, { itemId: 'water_bottle', weight: 4 }
-  ],
-  industrial_tools: [
-    { itemId: 'crowbar', weight: 7 }, { itemId: 'hatchet', weight: 6 }, { itemId: 'wrench', weight: 12 }, { itemId: 'toolbox', weight: 4 }, { itemId: 'duct_tape', weight: 12 },
-    { itemId: 'scrap_parts', weight: 14, minCount: 1, maxCount: 4 }, { itemId: 'firewood', weight: 12, minCount: 1, maxCount: 3 }, { itemId: 'stick', weight: 10, minCount: 1, maxCount: 3 },
-    { itemId: 'burlap_sack', weight: 5 }, { itemId: 'rope', weight: 4 }, { itemId: 'small_backpack', weight: 2 }, { itemId: 'work_pants', weight: 4 }, { itemId: 'boots', weight: 3 }
-  ]
+  residential_common: [{ itemId: 'canned_food', weight: 11 }, { itemId: 'crackers', weight: 10 }, { itemId: 'apple', weight: 7 }, { itemId: 'water_bottle', weight: 10 }, { itemId: 'dirty_water', weight: 4 }, { itemId: 'tshirt', weight: 8 }, { itemId: 'hoodie', weight: 7 }, { itemId: 'bandage', weight: 4 }, { itemId: 'energy_bar', weight: 5 }, { itemId: 'soda', weight: 4 }, { itemId: 'matches', weight: 3 }, { itemId: 'simple_key', weight: 2 }, { itemId: 'map', weight: 2 }],
+  residential_rare: [{ itemId: 'kitchen_knife', weight: 8 }, { itemId: 'small_backpack', weight: 5 }, { itemId: 'work_jacket', weight: 5 }, { itemId: 'rain_jacket', weight: 3 }, { itemId: 'painkillers', weight: 3 }, { itemId: 'sewing_kit', weight: 3 }, { itemId: 'rope', weight: 2 }, { itemId: 'lockpick', weight: 4, minCount: 1, maxCount: 2 }, { itemId: 'note_hospital', weight: 1 }, { itemId: 'ammo_9mm', weight: 1, minCount: 2, maxCount: 4 }],
+  supermarket_food: [{ itemId: 'canned_food', weight: 18 }, { itemId: 'beans', weight: 16 }, { itemId: 'crackers', weight: 16 }, { itemId: 'energy_bar', weight: 12 }, { itemId: 'apple', weight: 10 }, { itemId: 'rotten_food', weight: 5 }, { itemId: 'water_bottle', weight: 18 }, { itemId: 'soda', weight: 14 }, { itemId: 'sports_drink', weight: 8 }, { itemId: 'bandage', weight: 2 }],
+  police_weapons: [{ itemId: 'pistol', weight: 7 }, { itemId: 'tactical_vest', weight: 5 }, { itemId: 'motorcycle_helmet', weight: 4 }, { itemId: 'radio', weight: 8 }, { itemId: 'police_key', weight: 2 }, { itemId: 'bandage', weight: 4 }, { itemId: 'painkillers', weight: 3 }],
+  police_ammo: [{ itemId: 'ammo_9mm', weight: 24, minCount: 3, maxCount: 8 }, { itemId: 'pistol', weight: 2 }, { itemId: 'tactical_vest', weight: 2 }, { itemId: 'lockpick', weight: 3 }, { itemId: 'water_bottle', weight: 4 }],
+  military_weapons: [{ itemId: 'rifle', weight: 6 }, { itemId: 'pistol', weight: 4 }, { itemId: 'ammo_556', weight: 16, minCount: 3, maxCount: 8 }, { itemId: 'ammo_9mm', weight: 8, minCount: 3, maxCount: 8 }, { itemId: 'military_keycard', weight: 2 }, { itemId: 'weapon_cleaning_kit', weight: 4 }],
+  military_armor: [{ itemId: 'plate_carrier', weight: 6 }, { itemId: 'tactical_vest', weight: 8 }, { itemId: 'military_helmet', weight: 6 }, { itemId: 'military_pants', weight: 6 }, { itemId: 'field_pack', weight: 5 }, { itemId: 'hiking_backpack', weight: 4 }, { itemId: 'bandage', weight: 5 }, { itemId: 'note_convoy', weight: 1 }],
+  hospital_medical: [{ itemId: 'bandage', weight: 18 }, { itemId: 'improvised_bandage', weight: 6 }, { itemId: 'disinfectant', weight: 10 }, { itemId: 'painkillers', weight: 12 }, { itemId: 'blood_bag', weight: 6 }, { itemId: 'saline', weight: 6 }, { itemId: 'antibiotics', weight: 5 }, { itemId: 'clinic_key', weight: 2 }, { itemId: 'water_bottle', weight: 4 }],
+  industrial_tools: [{ itemId: 'crowbar', weight: 7 }, { itemId: 'hatchet', weight: 6 }, { itemId: 'wrench', weight: 12 }, { itemId: 'toolbox', weight: 4 }, { itemId: 'hammer', weight: 7 }, { itemId: 'saw', weight: 4 }, { itemId: 'duct_tape', weight: 12 }, { itemId: 'scrap_parts', weight: 14, minCount: 1, maxCount: 4 }, { itemId: 'metal_parts', weight: 10, minCount: 1, maxCount: 3 }, { itemId: 'nails', weight: 12, minCount: 2, maxCount: 6 }, { itemId: 'firewood', weight: 12, minCount: 1, maxCount: 3 }, { itemId: 'stick', weight: 10, minCount: 1, maxCount: 3 }, { itemId: 'burlap_sack', weight: 5 }, { itemId: 'rope', weight: 4 }, { itemId: 'small_backpack', weight: 2 }, { itemId: 'work_pants', weight: 4 }, { itemId: 'boots', weight: 3 }],
+  vehicle_common: [{ itemId: 'crackers', weight: 6 }, { itemId: 'water_bottle', weight: 5 }, { itemId: 'duct_tape', weight: 5 }, { itemId: 'nails', weight: 5, minCount: 1, maxCount: 4 }, { itemId: 'work_jacket', weight: 3 }, { itemId: 'lockpick', weight: 2 }],
+  vehicle_police: [{ itemId: 'ammo_9mm', weight: 12, minCount: 2, maxCount: 7 }, { itemId: 'pistol', weight: 2 }, { itemId: 'tactical_vest', weight: 2 }, { itemId: 'police_key', weight: 1 }],
+  vehicle_medical: [{ itemId: 'bandage', weight: 12 }, { itemId: 'disinfectant', weight: 6 }, { itemId: 'painkillers', weight: 6 }, { itemId: 'saline', weight: 4 }, { itemId: 'antibiotics', weight: 2 }],
+  event_military: [{ itemId: 'ammo_556', weight: 14, minCount: 3, maxCount: 8 }, { itemId: 'military_keycard', weight: 3 }, { itemId: 'rifle', weight: 3 }, { itemId: 'plate_carrier', weight: 3 }, { itemId: 'field_pack', weight: 2 }]
 };
 
+export const CONTAINER_LOOT: Record<ContainerKind, { pool: string; chance: number; capacity: number }> = {
+  cabinet: { pool: 'residential_common', chance: 0.55, capacity: 8 }, fridge: { pool: 'supermarket_food', chance: 0.62, capacity: 8 }, locker: { pool: 'residential_rare', chance: 0.45, capacity: 10 }, weapon_cabinet: { pool: 'police_weapons', chance: 0.62, capacity: 14 }, medical_cabinet: { pool: 'hospital_medical', chance: 0.78, capacity: 12 }, toolbox: { pool: 'industrial_tools', chance: 0.7, capacity: 12 }, military_crate: { pool: 'military_weapons', chance: 0.62, capacity: 16 }, vehicle_trunk: { pool: 'vehicle_common', chance: 0.58, capacity: 18 }, trash: { pool: 'residential_common', chance: 0.25, capacity: 6 }, ground_pack: { pool: 'residential_rare', chance: 0.6, capacity: 12 }, storage_box: { pool: 'residential_common', chance: 0, capacity: 34 }
+};
+
+export const VEHICLE_LOOT: Record<VehicleKind, string> = { car: 'vehicle_common', police_car: 'vehicle_police', ambulance: 'vehicle_medical', military_truck: 'event_military', van: 'industrial_tools' };
+
 export const BUILDING_LOOT: Record<BuildingType, LootSpotDefinition[]> = {
-  house: [
-    { pool: 'residential_common', chance: 0.44, label: 'Küchenschrank' },
-    { pool: 'residential_common', chance: 0.34, label: 'Kommode' },
-    { pool: 'residential_rare', chance: 0.14, label: 'Abstellkammer' }
-  ],
-  market: [
-    { pool: 'supermarket_food', chance: 0.72, label: 'Lebensmittelregal' },
-    { pool: 'supermarket_food', chance: 0.68, label: 'Getränkekiste' },
-    { pool: 'supermarket_food', chance: 0.58, label: 'Kassenbereich' },
-    { pool: 'hospital_medical', chance: 0.11, label: 'Erste-Hilfe-Ecke' }
-  ],
-  police: [
-    { pool: 'police_weapons', chance: 0.5, label: 'Waffenschrank' },
-    { pool: 'police_ammo', chance: 0.56, label: 'Munitionsspind' },
-    { pool: 'police_weapons', chance: 0.28, label: 'Asservatenkiste' },
-    { pool: 'residential_common', chance: 0.14, label: 'Pausenraum' }
-  ],
-  military: [
-    { pool: 'military_weapons', chance: 0.58, label: 'Waffenkiste' },
-    { pool: 'military_armor', chance: 0.54, label: 'Ausrüstungskiste' },
-    { pool: 'military_weapons', chance: 0.34, label: 'Munitionskiste' },
-    { pool: 'hospital_medical', chance: 0.16, label: 'Sanitätsrucksack' }
-  ],
-  hospital: [
-    { pool: 'hospital_medical', chance: 0.76, label: 'Medizinschrank' },
-    { pool: 'hospital_medical', chance: 0.66, label: 'Behandlungswagen' },
-    { pool: 'hospital_medical', chance: 0.58, label: 'Notfalltasche' },
-    { pool: 'supermarket_food', chance: 0.10, label: 'Personalraum' }
-  ],
-  workshop: [
-    { pool: 'industrial_tools', chance: 0.64, label: 'Werkzeugbank' },
-    { pool: 'industrial_tools', chance: 0.52, label: 'Materialkiste' },
-    { pool: 'residential_rare', chance: 0.18, label: 'Spind' }
-  ]
+  house: [{ pool: 'residential_common', chance: 0.44, label: 'Küchenschrank' }, { pool: 'residential_common', chance: 0.34, label: 'Kommode' }, { pool: 'residential_rare', chance: 0.14, label: 'Abstellkammer' }],
+  market: [{ pool: 'supermarket_food', chance: 0.72, label: 'Lebensmittelregal' }, { pool: 'supermarket_food', chance: 0.68, label: 'Getränkekiste' }, { pool: 'supermarket_food', chance: 0.58, label: 'Kassenbereich' }, { pool: 'hospital_medical', chance: 0.11, label: 'Erste-Hilfe-Ecke' }],
+  police: [{ pool: 'police_weapons', chance: 0.5, label: 'Waffenschrank' }, { pool: 'police_ammo', chance: 0.56, label: 'Munitionsspind' }, { pool: 'police_weapons', chance: 0.28, label: 'Asservatenkiste' }, { pool: 'residential_common', chance: 0.14, label: 'Pausenraum' }],
+  military: [{ pool: 'military_weapons', chance: 0.58, label: 'Waffenkiste' }, { pool: 'military_armor', chance: 0.54, label: 'Ausrüstungskiste' }, { pool: 'military_weapons', chance: 0.34, label: 'Munitionskiste' }, { pool: 'hospital_medical', chance: 0.16, label: 'Sanitätsrucksack' }],
+  hospital: [{ pool: 'hospital_medical', chance: 0.76, label: 'Medizinschrank' }, { pool: 'hospital_medical', chance: 0.66, label: 'Behandlungswagen' }, { pool: 'hospital_medical', chance: 0.58, label: 'Notfalltasche' }, { pool: 'supermarket_food', chance: 0.10, label: 'Personalraum' }],
+  workshop: [{ pool: 'industrial_tools', chance: 0.64, label: 'Werkzeugbank' }, { pool: 'industrial_tools', chance: 0.52, label: 'Materialkiste' }, { pool: 'residential_rare', chance: 0.18, label: 'Spind' }]
 };
