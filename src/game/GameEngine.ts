@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { AtmosphereSystem } from './AtmosphereSystem';
 import { BALANCE } from './Balance';
+import { CraftingSystem } from './CraftingSystem';
 import { ITEMS } from './data';
-import { Inventory } from './Inventory';
+import { FireSystem } from './FireSystem';
+import { Inventory, conditionLabel } from './Inventory';
 import { LootSystem } from './LootSystem';
 import { applyDamage, applyItemEffects, cloneDefaultVitals, updatePlayerVitals } from './PlayerStats';
 import { SaveSystem } from './SaveSystem';
@@ -10,9 +12,17 @@ import { SoundSystem } from './SoundSystem';
 import { WorldBuilder, type WorldLootSpot } from './WorldBuilder';
 import { Zombie } from './Zombie';
 import { ZombieSpawner } from './ZombieSpawner';
-import type { HudState, PlayerVitals, SpawnZoneDefinition } from './types';
+import type { CraftingRecipeView, HudState, PlayerVitals, SpawnZoneDefinition } from './types';
 
 type KeyMap = Record<string, boolean>;
+
+interface ActiveAction {
+  label: string;
+  duration: number;
+  elapsed: number;
+  startPosition: THREE.Vector3;
+  onComplete: () => void;
+}
 
 export class GameEngine {
   private renderer: THREE.WebGLRenderer;
@@ -25,6 +35,8 @@ export class GameEngine {
   private inventory = new Inventory();
   private loot = new LootSystem();
   private sound = new SoundSystem();
+  private crafting = new CraftingSystem();
+  private fires = new FireSystem(this.scene);
   private atmosphere!: AtmosphereSystem;
   private clock = new THREE.Clock();
   private raycaster = new THREE.Raycaster();
@@ -39,12 +51,15 @@ export class GameEngine {
   private interactionPrompt = '';
   private warning = '';
   private inventoryOpen = false;
+  private craftingOpen = false;
   private stats: PlayerVitals = cloneDefaultVitals();
   private lastPrimaryAttack = 0;
   private reloadTimer = 0;
   private autoSaveTimer = 0;
   private stepTimer = 0;
   private damageFlash = 0;
+  private nearbyFireWarmth = 0;
+  private activeAction: ActiveAction | null = null;
   private hoveredLoot: WorldLootSpot | null = null;
   private magazineAmmo = new Map<string, number>();
   private scratchVector = new THREE.Vector3();
@@ -106,12 +121,24 @@ export class GameEngine {
 
   private onKeyDown = (event: KeyboardEvent) => {
     this.keys[event.code] = true;
+    if (this.activeAction && event.code !== 'Tab') return;
+
+    if (this.craftingOpen && event.code.startsWith('Digit')) {
+      const recipeIndex = Number(event.code.replace('Digit', '')) - 4;
+      if (recipeIndex >= 0) this.startCraftingByIndex(recipeIndex);
+      return;
+    }
+
     if (event.code === 'Tab') {
       event.preventDefault();
       this.inventoryOpen = !this.inventoryOpen;
       this.sound.play('inventory', 0.15);
       this.raiseNoise(BALANCE.sound.inventoryNoiseRadius, 'Inventar raschelt.');
       this.emitHud();
+    }
+    if (event.code === 'KeyK') {
+      this.craftingOpen = !this.craftingOpen;
+      this.message = this.craftingOpen ? 'Crafting geöffnet. Nutze 4-9 für sichtbare Rezepte.' : 'Crafting geschlossen.';
     }
     if (event.code === 'KeyE') this.interact();
     if (event.code === 'Digit1') this.equipWeaponSlot(0);
@@ -120,9 +147,11 @@ export class GameEngine {
     if (event.code === 'KeyV') this.equipBestArmor();
     if (event.code === 'KeyB') this.equipBestBackpack();
     if (event.code === 'KeyR') this.reloadEquippedWeapon();
-    if (event.code === 'KeyF') this.consumeFood();
-    if (event.code === 'KeyG') this.consumeDrink();
-    if (event.code === 'KeyH') this.useMedical();
+    if (event.code === 'KeyF') this.startConsumeFood();
+    if (event.code === 'KeyG') this.startConsumeDrink();
+    if (event.code === 'KeyH') this.startUseMedical();
+    if (event.code === 'KeyT') this.startRepair();
+    if (event.code === 'KeyY') this.startPlaceFire();
     if (event.code === 'F6') this.saveGame(true);
     if (event.code === 'F9') this.loadGame(true);
     if (event.code === BALANCE.loot.debugRespawnKey) this.regenerateLoot(true);
@@ -142,7 +171,7 @@ export class GameEngine {
   };
 
   private onMouseDown = (event: MouseEvent) => {
-    if (event.button !== 0 || document.pointerLockElement !== this.canvas) return;
+    if (event.button !== 0 || document.pointerLockElement !== this.canvas || this.activeAction) return;
     this.primaryAttack();
   };
 
@@ -155,8 +184,18 @@ export class GameEngine {
 
   private update(delta: number) {
     this.updateMovement(delta);
-    updatePlayerVitals(this.stats, delta);
+    this.fires.update(delta);
+    this.nearbyFireWarmth = this.fires.warmthAt(this.camera.position);
+    updatePlayerVitals(this.stats, delta, {
+      weather: this.atmosphere.weather,
+      isNight: this.atmosphere.isNight(),
+      warmth: this.inventory.warmth,
+      rainProtection: this.inventory.rainProtection,
+      nearbyFireWarmth: this.nearbyFireWarmth,
+      totalWeight: this.inventory.totalWeight
+    });
     this.updateReload(delta);
+    this.updateAction(delta);
     this.atmosphere.update(delta, this.camera.position);
     this.updateInteractionPrompt();
     this.updateWarnings();
@@ -187,13 +226,34 @@ export class GameEngine {
     this.emitHud(alerted);
   }
 
+  private weightPenalty() {
+    const weight = this.inventory.totalWeight;
+    if (weight <= BALANCE.weight.comfortableKg) return { drain: 1, regen: 1, speed: 1 };
+    if (weight >= BALANCE.weight.heavyKg) return {
+      drain: BALANCE.weight.staminaDrainHeavyMultiplier,
+      regen: BALANCE.weight.staminaRegenHeavyMultiplier,
+      speed: BALANCE.weight.sprintSpeedHeavyMultiplier
+    };
+    const factor = (weight - BALANCE.weight.comfortableKg) / (BALANCE.weight.heavyKg - BALANCE.weight.comfortableKg);
+    return {
+      drain: 1 + (BALANCE.weight.staminaDrainHeavyMultiplier - 1) * factor,
+      regen: 1 - (1 - BALANCE.weight.staminaRegenHeavyMultiplier) * factor,
+      speed: 1 - (1 - BALANCE.weight.sprintSpeedHeavyMultiplier) * factor
+    };
+  }
+
   private updateMovement(delta: number) {
+    if (this.stats.unconscious) return;
     const forward = (this.pressed('KeyW') ? 1 : 0) - (this.pressed('KeyS') ? 1 : 0);
     const strafe = (this.pressed('KeyD') ? 1 : 0) - (this.pressed('KeyA') ? 1 : 0);
     const moving = forward !== 0 || strafe !== 0;
     const sneaking = this.pressed('ControlLeft') || this.pressed('ControlRight') || this.pressed('KeyC');
-    const sprinting = this.pressed('ShiftLeft') && moving && !sneaking && this.stats.stamina > 4;
-    const speed = sneaking ? 1.35 : sprinting ? 5.7 : 3.05;
+    const weight = this.weightPenalty();
+    const painRegen = 1 - (this.stats.pain / 100) * BALANCE.vitals.painStaminaRegenPenalty;
+    const illnessRegen = this.stats.sick ? 1 - BALANCE.vitals.illnessStaminaPenalty : 1;
+    const fractureSpeed = this.stats.fracture ? BALANCE.vitals.fractureSprintPenalty : 1;
+    const sprinting = this.pressed('ShiftLeft') && moving && !sneaking && this.stats.stamina > 4 && !this.activeAction;
+    const speed = (sneaking ? 1.35 : sprinting ? 5.7 * weight.speed * fractureSpeed : 3.05 * fractureSpeed);
 
     const direction = this.scratchVector.set(strafe, 0, -forward);
     if (direction.lengthSq() > 0) {
@@ -201,10 +261,10 @@ export class GameEngine {
       this.camera.position.addScaledVector(direction, speed * delta);
     }
 
-    if (sprinting) this.stats.stamina = Math.max(0, this.stats.stamina - BALANCE.vitals.sprintStaminaPerSecond * delta);
-    else this.stats.stamina = Math.min(100, this.stats.stamina + (sneaking ? BALANCE.vitals.sneakStaminaRegenPerSecond : BALANCE.vitals.walkStaminaRegenPerSecond) * delta);
+    if (sprinting) this.stats.stamina = Math.max(0, this.stats.stamina - BALANCE.vitals.sprintStaminaPerSecond * weight.drain * delta);
+    else this.stats.stamina = Math.min(100, this.stats.stamina + (sneaking ? BALANCE.vitals.sneakStaminaRegenPerSecond : BALANCE.vitals.walkStaminaRegenPerSecond) * weight.regen * painRegen * illnessRegen * delta);
 
-    if (this.pressed('Space') && this.grounded && this.stats.stamina > BALANCE.vitals.jumpStaminaCost) {
+    if (this.pressed('Space') && this.grounded && this.stats.stamina > BALANCE.vitals.jumpStaminaCost && !this.activeAction) {
       this.verticalVelocity = 5;
       this.grounded = false;
       this.stats.stamina -= BALANCE.vitals.jumpStaminaCost;
@@ -239,9 +299,32 @@ export class GameEngine {
     this.reloadTimer = Math.max(0, this.reloadTimer - delta);
   }
 
+  private updateAction(delta: number) {
+    if (!this.activeAction) return;
+    if (this.activeAction.startPosition.distanceTo(this.camera.position) > 1.25) {
+      this.message = `${this.activeAction.label} abgebrochen: du hast dich bewegt.`;
+      this.activeAction = null;
+      return;
+    }
+    this.activeAction.elapsed += delta;
+    if (this.activeAction.elapsed >= this.activeAction.duration) {
+      const complete = this.activeAction.onComplete;
+      const label = this.activeAction.label;
+      this.activeAction = null;
+      complete();
+      if (!this.message) this.message = `${label} abgeschlossen.`;
+    }
+  }
+
   private updateWarnings() {
-    if (this.stats.hp <= 25) this.warning = 'Kritische Verletzung: HP niedrig.';
+    if (this.stats.unconscious) this.warning = 'Bewusstlosigkeit vorbereitet: kritischer Zustand.';
+    else if (this.stats.hp <= 25) this.warning = 'Kritische Verletzung: HP niedrig.';
     else if (this.stats.bleeding) this.warning = 'Du blutest. Verband oder Blutbeutel benutzen.';
+    else if (this.stats.infected) this.warning = 'Infektion aktiv. Antibiotika oder Desinfektion suchen.';
+    else if (this.stats.sick) this.warning = 'Krankheit aktiv. Sauberes Wasser und Medizin werden wichtig.';
+    else if (this.stats.bodyTemperature < 35.5) this.warning = 'Unterkühlung: trocken bleiben oder Feuer suchen.';
+    else if (this.stats.wetness > 65) this.warning = 'Du bist nass. Regenjacke oder Feuer hilft.';
+    else if (this.stats.pain > 45) this.warning = 'Starker Schmerz reduziert deine Ausdauer-Regeneration.';
     else if (this.stats.thirst <= 18) this.warning = 'Durst kritisch. Suche Wasser.';
     else if (this.stats.hunger <= 18) this.warning = 'Hunger niedrig. Nahrung wird wichtig.';
     else if (this.atmosphere.isNight()) this.warning = 'Nacht: Sicht schlecht, Bewegung riskanter.';
@@ -306,7 +389,7 @@ export class GameEngine {
 
   private equipBestArmor() {
     this.message = this.inventory.equipBestArmor()
-      ? `Rüstung/Kleidung ausgerüstet: ${this.inventory.equippedArmor()?.name}.`
+      ? `Rüstung/Kleidung ausgerüstet: ${this.inventory.equippedArmor()?.name ?? 'Kleidung'}.`
       : 'Keine Rüstung oder Kleidung im Inventar.';
   }
 
@@ -317,14 +400,15 @@ export class GameEngine {
   }
 
   private primaryAttack() {
-    if (this.stats.hp <= 0) return;
+    if (this.stats.hp <= 0 || this.stats.unconscious) return;
     const weapon = this.inventory.equippedWeapon();
     const weaponData = weapon?.weapon ?? {
       kind: 'melee' as const,
       damage: BALANCE.weapons.fallbackMeleeDamage,
       range: BALANCE.weapons.fallbackMeleeRange,
       noiseRadius: BALANCE.weapons.fallbackMeleeNoiseRadius,
-      fireRate: BALANCE.weapons.fallbackMeleeFireRate
+      fireRate: BALANCE.weapons.fallbackMeleeFireRate,
+      malfunctionBaseChance: 0
     };
     const now = performance.now();
     const cooldownMs = 60000 / weaponData.fireRate;
@@ -335,24 +419,39 @@ export class GameEngine {
     }
     this.lastPrimaryAttack = now;
 
+    if (weapon && this.inventory.isRuined(weapon.id)) {
+      this.message = `${weapon.name} ist ruiniert und kann nicht benutzt werden.`;
+      return;
+    }
+
     if (weaponData.kind === 'ranged') {
       if (!weapon) return;
+      const malfunctionChance = (weaponData.malfunctionBaseChance ?? 0) + ((100 - this.inventory.durabilityOf(weapon.id)) / 100) * BALANCE.weapons.malfunctionConditionMultiplier;
+      if (Math.random() < malfunctionChance) {
+        this.inventory.damageItem(weapon.id, BALANCE.weapons.conditionLossShot * 1.8);
+        this.message = `${weapon.name} hat eine Ladehemmung. Zustand: ${conditionLabel(this.inventory.conditionOf(weapon.id))}.`;
+        this.raiseNoise(3);
+        return;
+      }
       const loaded = this.magazineAmmo.get(weapon.id) ?? 0;
       if (loaded <= 0) {
         this.message = 'Waffe leer. Drücke R zum Nachladen.';
         return;
       }
       this.magazineAmmo.set(weapon.id, loaded - 1);
+      this.inventory.damageItem(weapon.id, BALANCE.weapons.conditionLossShot);
       this.sound.play('gunshot', 0.82);
       this.raiseNoise(weaponData.noiseRadius, 'Schuss abgefeuert. Zombies könnten aus großer Entfernung reagieren.');
     } else {
+      if (weapon) this.inventory.damageItem(weapon.id, BALANCE.weapons.conditionLossMelee);
       this.stats.stamina = Math.max(0, this.stats.stamina - BALANCE.vitals.meleeStaminaCost);
       this.raiseNoise(weaponData.noiseRadius);
     }
 
     const hit = this.findZombieInCrosshair(weaponData.range);
     if (hit) {
-      hit.damage(weaponData.damage, this.camera.position);
+      const conditionMultiplier = weapon ? this.inventory.conditionMultiplier(weapon.id) : 1;
+      hit.damage(weaponData.damage * conditionMultiplier, this.camera.position);
       this.message = hit.alive ? 'Treffer. Der Zombie bleibt gefährlich.' : 'Zombie ausgeschaltet.';
     } else if (weaponData.kind === 'melee') {
       this.message = 'Du triffst ins Leere.';
@@ -384,6 +483,10 @@ export class GameEngine {
       this.message = 'Diese Waffe muss nicht nachgeladen werden.';
       return;
     }
+    if (this.inventory.isRuined(weapon.id)) {
+      this.message = `${weapon.name} ist ruiniert.`;
+      return;
+    }
 
     const loaded = this.magazineAmmo.get(weapon.id) ?? 0;
     const needed = data.magazineSize - loaded;
@@ -397,58 +500,124 @@ export class GameEngine {
       return;
     }
 
-    const amount = Math.min(needed, reserve);
-    this.inventory.consumeAmmo(data.ammoType, amount);
-    this.magazineAmmo.set(weapon.id, loaded + amount);
-    this.reloadTimer = data.reloadTime ?? 1;
-    this.sound.play('reload', 0.24);
-    this.raiseNoise(BALANCE.sound.reloadNoiseRadius, 'Nachladen macht Geräusche.');
-    this.message = `${weapon.name} nachgeladen: ${loaded + amount}/${data.magazineSize}.`;
+    this.startAction('Nachladen', data.reloadTime ?? 1, () => {
+      const amount = Math.min(needed, this.inventory.count(data.ammoType ?? ''));
+      if (!data.ammoType || amount <= 0) {
+        this.message = 'Nachladen fehlgeschlagen: keine Munition mehr.';
+        return;
+      }
+      this.inventory.consumeAmmo(data.ammoType, amount);
+      this.magazineAmmo.set(weapon.id, loaded + amount);
+      this.sound.play('reload', 0.24);
+      this.raiseNoise(BALANCE.sound.reloadNoiseRadius, 'Nachladen macht Geräusche.');
+      this.message = `${weapon.name} nachgeladen: ${loaded + amount}/${data.magazineSize}.`;
+    });
   }
 
   private takeDamage(rawDamage: number, bleedChance: number) {
     const result = applyDamage(this.stats, rawDamage, this.inventory.armor, bleedChance);
+    this.activeAction = null;
     this.damageFlash = 1;
     this.sound.play('injury', 0.5);
     this.raiseNoise(BALANCE.sound.painNoiseRadius);
     this.message = result.startedBleeding
       ? `Zombieangriff! ${Math.round(result.damageTaken)} Schaden, du blutest.`
       : `Zombieangriff! ${Math.round(result.damageTaken)} Schaden. Abstand gewinnen.`;
+    if (result.infectedByHit) this.message += ' Infektionsrisiko!';
   }
 
-  private consumeFood() {
-    const item = this.inventory.useBestFood();
+  private startConsumeFood() {
+    const item = this.inventory.entries().find((entry) => entry.type === 'food' && entry.canUse);
     if (!item) {
       this.message = 'Keine Nahrung im Inventar.';
       return;
     }
-    applyItemEffects(this.stats, item);
-    this.sound.play('consume', 0.16);
-    this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
-    this.message = `${item.name} gegessen. Hunger steigt.`;
+    this.startAction(`Essen: ${item.name}`, 2.6, () => {
+      const consumed = this.inventory.useBestFood();
+      if (!consumed) return;
+      applyItemEffects(this.stats, consumed);
+      this.sound.play('consume', 0.16);
+      this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
+      this.message = `${consumed.name} gegessen.`;
+    });
   }
 
-  private consumeDrink() {
-    const item = this.inventory.useBestDrink();
+  private startConsumeDrink() {
+    const item = this.inventory.entries().find((entry) => entry.type === 'drink' && entry.canUse);
     if (!item) {
       this.message = 'Kein Getränk im Inventar.';
       return;
     }
-    applyItemEffects(this.stats, item);
-    this.sound.play('consume', 0.16);
-    this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
-    this.message = `${item.name} getrunken. Durst steigt.`;
+    this.startAction(`Trinken: ${item.name}`, 2.2, () => {
+      const consumed = this.inventory.useBestDrink();
+      if (!consumed) return;
+      applyItemEffects(this.stats, consumed);
+      this.sound.play('consume', 0.16);
+      this.raiseNoise(BALANCE.sound.eatDrinkNoiseRadius);
+      this.message = `${consumed.name} getrunken.`;
+    });
   }
 
-  private useMedical() {
-    const item = this.inventory.useMedical();
+  private startUseMedical() {
+    const item = this.inventory.entries().find((entry) => entry.type === 'medical' && entry.canUse);
     if (!item) {
       this.message = 'Keine Medizin im Inventar.';
       return;
     }
-    applyItemEffects(this.stats, item);
-    this.sound.play('consume', 0.14);
-    this.message = `${item.name} verwendet.`;
+    this.startAction(`Medizin: ${item.name}`, item.id.includes('bandage') ? 4.6 : 3.2, () => {
+      const consumed = this.inventory.useMedical();
+      if (!consumed) return;
+      applyItemEffects(this.stats, consumed);
+      this.sound.play('consume', 0.14);
+      this.message = `${consumed.name} verwendet.`;
+    });
+  }
+
+  private startRepair() {
+    this.startAction('Reparieren', BALANCE.crafting.repairTimeSeconds, () => {
+      const result = this.inventory.repairBestEquipped();
+      this.message = result.message;
+      if (result.ok) this.sound.play('pickup', 0.12);
+    });
+  }
+
+  private startPlaceFire() {
+    if (!this.inventory.has('campfire_kit')) {
+      this.message = 'Du brauchst ein Lagerfeuer-Set. Öffne Crafting mit K.';
+      return;
+    }
+    if (!this.inventory.hasAny(['matches', 'lighter'])) {
+      this.message = 'Du brauchst Streichhölzer oder ein Feuerzeug.';
+      return;
+    }
+    this.startAction('Lagerfeuer anzünden', BALANCE.crafting.campfireTimeSeconds, () => {
+      if (!this.inventory.consumeForCrafting('campfire_kit', 1)) return;
+      if (this.inventory.has('matches')) this.inventory.consumeForCrafting('matches', 1);
+      this.fires.place(this.camera.position.clone().add(new THREE.Vector3(0, 0, -2).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)));
+      this.raiseNoise(BALANCE.fire.noiseRadius, 'Lagerfeuer brennt. Wärme und Licht können dich retten, aber auch auffallen.');
+    });
+  }
+
+  private startCraftingByIndex(index: number) {
+    const views = this.crafting.view(this.inventory);
+    const view = views[index];
+    if (!view) return;
+    const recipe = this.crafting.recipeById(view.id);
+    if (!recipe) return;
+    if (!view.available) {
+      this.message = `Rezept nicht verfügbar. Fehlt: ${view.missing.join(', ')}`;
+      return;
+    }
+    this.startAction(`Crafting: ${recipe.name}`, recipe.timeSeconds, () => {
+      const ok = this.crafting.craft(this.inventory, recipe);
+      this.message = ok ? `Gecraftet: ${ITEMS[recipe.result.itemId].name}.` : 'Crafting fehlgeschlagen.';
+    });
+  }
+
+  private startAction(label: string, duration: number, onComplete: () => void) {
+    if (this.activeAction) return;
+    this.activeAction = { label, duration, elapsed: 0, startPosition: this.camera.position.clone(), onComplete };
+    this.message = `${label} läuft... Bewegung oder Treffer brechen ab.`;
   }
 
   private raiseNoise(radius: number, message?: string) {
@@ -499,7 +668,8 @@ export class GameEngine {
         respawnAt: spot.respawnAt
       })),
       timeOfDay: this.atmosphere.timeOfDay,
-      weather: this.atmosphere.weather
+      weather: this.atmosphere.weather,
+      campfires: this.fires.toSaveData()
     });
     if (manual) this.message = success ? 'Spielstand gespeichert.' : 'Speichern fehlgeschlagen.';
   }
@@ -519,6 +689,7 @@ export class GameEngine {
     this.inventory.loadSaveData(save.inventory);
     this.magazineAmmo = new Map(Object.entries(save.magazines ?? {}).map(([key, value]) => [key, Number(value)]));
     this.atmosphere.setState(save.timeOfDay, save.weather);
+    this.fires.loadSaveData(save.campfires ?? []);
     this.applyLootSave(save.lootSpots ?? []);
     this.message = manual ? 'Spielstand geladen.' : 'Lokaler Spielstand geladen.';
   }
@@ -537,12 +708,17 @@ export class GameEngine {
     });
   }
 
+  private craftingViews(): CraftingRecipeView[] {
+    return this.crafting.view(this.inventory).slice(0, 6);
+  }
+
   private emitHud(zombiesAlerted = 0) {
     const weapon = this.inventory.equippedWeapon();
     const weaponData = weapon?.weapon;
     const reserveAmmo = this.inventory.ammoForEquippedWeapon();
     const loadedAmmo = weapon ? this.magazineAmmo.get(weapon.id) ?? 0 : 0;
     const ammoText = weaponData?.kind === 'ranged' ? `${loadedAmmo}/${reserveAmmo}` : 'Nahkampf';
+    const weaponCondition = weapon ? conditionLabel(this.inventory.conditionOf(weapon.id)) : '-';
 
     this.onHudChange({
       hp: Math.round(this.stats.hp),
@@ -552,23 +728,41 @@ export class GameEngine {
       bleeding: this.stats.bleeding,
       infection: Math.round(this.stats.infection),
       infected: this.stats.infected,
+      bodyTemperature: Math.round(this.stats.bodyTemperature * 10) / 10,
+      wetness: Math.round(this.stats.wetness),
+      cold: Math.round(this.stats.cold),
+      illness: Math.round(this.stats.illness),
+      sick: this.stats.sick,
+      pain: Math.round(this.stats.pain),
+      unconscious: this.stats.unconscious,
+      fracture: this.stats.fracture,
       capacity: this.inventory.capacity,
       usedSlots: this.inventory.usedSlots,
+      totalWeight: this.inventory.totalWeight,
       armor: this.inventory.armor,
+      warmth: this.inventory.warmth,
+      rainProtection: this.inventory.rainProtection,
       weapon: weapon?.name ?? 'Fäuste',
+      weaponCondition,
       ammo: reserveAmmo,
       ammoText,
       currentBackpack: this.inventory.equippedBackpack()?.name ?? 'Kein Rucksack',
       currentArmor: this.inventory.equippedArmor()?.name ?? 'Keine Rüstung',
+      clothing: this.inventory.clothingSummary(),
       zombiesAlerted,
       interactionPrompt: this.interactionPrompt,
       message: this.message,
       warning: this.warning,
       inventoryOpen: this.inventoryOpen,
+      craftingOpen: this.craftingOpen,
+      craftingRecipes: this.craftingViews(),
       inventory: this.inventory.entries(),
       timeText: this.atmosphere.timeText(),
       weather: this.atmosphere.weather,
       noiseLevel: this.noiseLabel,
+      actionLabel: this.activeAction?.label ?? '',
+      actionProgress: this.activeAction ? Math.min(1, this.activeAction.elapsed / this.activeAction.duration) : 0,
+      nearbyFireWarmth: Math.round(this.nearbyFireWarmth * 100),
       damageFlash: this.damageFlash
     });
   }
