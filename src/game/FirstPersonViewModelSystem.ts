@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AssetRegistry } from './AssetRegistry';
 import { ItemModelFactory } from './ItemModelFactory';
 import { ITEMS } from './data';
 
@@ -20,18 +21,14 @@ export class FirstPersonViewModelSystem {
     if (this.currentItemId === itemId) return;
     this.currentItemId = itemId;
     this.root.clear();
-    if (!itemId) {
-      this.createHands();
-      return;
-    }
+    if (!itemId) { this.createHands(); return; }
     const item = ITEMS[itemId];
-    if (!item?.weapon && item.type !== 'medical' && item.type !== 'food' && item.type !== 'drink') {
-      this.createHands();
-      return;
-    }
+    if (!item?.weapon && item.type !== 'medical' && item.type !== 'food' && item.type !== 'drink') { this.createHands(); return; }
+    const asset = AssetRegistry.item(itemId);
     const model = ItemModelFactory.create(itemId, { viewModel: true });
-    model.position.set(0, 0, 0);
-    model.rotation.set(0.12, item.weapon?.kind === 'melee' ? 0.55 : 0.08, item.weapon?.kind === 'melee' ? -0.55 : 0);
+    const cfg = asset.viewModel;
+    if (cfg) { model.scale.multiplyScalar(cfg.scale); model.position.set(...cfg.position); model.rotation.set(...cfg.rotation); }
+    else model.rotation.set(0.12, item.weapon?.kind === 'melee' ? 0.55 : 0.08, item.weapon?.kind === 'melee' ? -0.55 : 0);
     this.root.add(model);
     this.createHands();
   }
@@ -56,12 +53,15 @@ export class FirstPersonViewModelSystem {
 
   private createHands() {
     const skin = new THREE.MeshStandardMaterial({ color: 0x9a7760, roughness: 0.95 });
+    const sleeve = new THREE.MeshStandardMaterial({ color: 0x343b35, roughness: 1 });
+    const leftSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.18, 3, 8), sleeve);
+    const rightSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.18, 3, 8), sleeve);
     const left = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.28, 3, 8), skin);
     const right = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.28, 3, 8), skin);
-    left.position.set(-0.12, -0.06, 0.1);
-    right.position.set(0.16, -0.04, 0.08);
-    left.rotation.set(1.15, 0.1, -0.22);
-    right.rotation.set(1.1, -0.2, 0.24);
-    this.root.add(left, right);
+    leftSleeve.position.set(-0.16, -0.1, 0.16); rightSleeve.position.set(0.2, -0.08, 0.14);
+    left.position.set(-0.12, -0.06, 0.1); right.position.set(0.16, -0.04, 0.08);
+    left.rotation.set(1.15, 0.1, -0.22); right.rotation.set(1.1, -0.2, 0.24);
+    leftSleeve.rotation.copy(left.rotation); rightSleeve.rotation.copy(right.rotation);
+    this.root.add(leftSleeve, rightSleeve, left, right);
   }
 }
