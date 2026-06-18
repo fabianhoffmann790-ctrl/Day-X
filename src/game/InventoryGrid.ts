@@ -1,3 +1,4 @@
+import { BALANCE } from './Balance';
 import { ITEMS } from './data';
 import type { EquipmentSlot, GridSize, InventoryGridItem } from './types';
 
@@ -12,69 +13,10 @@ const explicitSizes: Record<string, GridSize> = {
   toolbox: { cols: 3, rows: 2 }, hammer: { cols: 1, rows: 2 }, wrench: { cols: 1, rows: 2 }, duct_tape: { cols: 1, rows: 1 }, sewing_kit: { cols: 1, rows: 1 }, weapon_cleaning_kit: { cols: 2, rows: 1 }, nails: { cols: 1, rows: 1 }, firewood: { cols: 1, rows: 2 }, rope: { cols: 1, rows: 2 }, map: { cols: 2, rows: 1 }, compass: { cols: 1, rows: 1 }, lockpick: { cols: 1, rows: 1 }, matches: { cols: 1, rows: 1 }, lighter: { cols: 1, rows: 1 }, campfire_kit: { cols: 2, rows: 2 }
 };
 
-export function itemGridSize(itemId: string, rotated = false): GridSize {
-  const base = explicitSizes[itemId] ?? fallbackSize(itemId);
-  return rotated ? { cols: base.rows, rows: base.cols } : base;
-}
-
-function fallbackSize(itemId: string): GridSize {
-  const item = ITEMS[itemId];
-  if (!item) return { cols: 1, rows: 1 };
-  if (item.type === 'ranged_weapon') return { cols: 4, rows: 2 };
-  if (item.type === 'melee_weapon') return { cols: 1, rows: 3 };
-  if (item.type === 'backpack' || item.type === 'armor') return { cols: 3, rows: 3 };
-  if (item.type === 'clothing') return { cols: 2, rows: 2 };
-  if (item.type === 'drink') return { cols: 1, rows: 2 };
-  if (item.type === 'tool') return { cols: 2, rows: 1 };
-  return { cols: 1, rows: 1 };
-}
-
-export function backpackGridSize(backpackId: string | null): GridSize {
-  if (backpackId === 'field_pack') return { cols: 8, rows: 8 };
-  if (backpackId === 'hiking_backpack') return { cols: 7, rows: 6 };
-  if (backpackId === 'improvised_backpack') return { cols: 7, rows: 6 };
-  if (backpackId === 'small_backpack') return { cols: 6, rows: 5 };
-  return { cols: 5, rows: 4 };
-}
-
-export function equipmentSlotForItem(itemId: string): EquipmentSlot | null {
-  const item = ITEMS[itemId];
-  if (!item) return null;
-  if (item.type === 'ranged_weapon') return item.id === 'rifle' ? 'primary' : 'secondary';
-  if (item.type === 'melee_weapon') return 'melee';
-  if (item.clothingSlot) return item.clothingSlot;
-  if (item.type === 'backpack') return 'backpack';
-  return null;
-}
-
-export function canPlace(items: InventoryGridItem[], grid: GridSize, candidate: InventoryGridItem, x: number, y: number, rotated = candidate.rotated) {
-  const size = itemGridSize(candidate.itemId, rotated);
-  if (x < 0 || y < 0 || x + size.cols > grid.cols || y + size.rows > grid.rows) return false;
-  return !items.some((item) => {
-    if (item.instanceId === candidate.instanceId || item.location !== 'grid') return false;
-    const otherSize = itemGridSize(item.itemId, item.rotated);
-    return x < item.x + otherSize.cols && x + size.cols > item.x && y < item.y + otherSize.rows && y + size.rows > item.y;
-  });
-}
-
-export function firstFreePosition(items: InventoryGridItem[], grid: GridSize, candidate: InventoryGridItem, rotated = candidate.rotated) {
-  const size = itemGridSize(candidate.itemId, rotated);
-  for (let y = 0; y <= grid.rows - size.rows; y += 1) for (let x = 0; x <= grid.cols - size.cols; x += 1) if (canPlace(items, grid, candidate, x, y, rotated)) return { x, y, rotated };
-  if (size.cols !== size.rows) for (let y = 0; y <= grid.rows - size.cols; y += 1) for (let x = 0; x <= grid.cols - size.rows; x += 1) if (canPlace(items, grid, candidate, x, y, !rotated)) return { x, y, rotated: !rotated };
-  return null;
-}
-
-export function validateGrid(items: InventoryGridItem[], grid: GridSize) {
-  const occupied = new Set<string>();
-  const errors: string[] = [];
-  for (const item of items.filter((entry) => entry.location === 'grid')) {
-    const size = itemGridSize(item.itemId, item.rotated);
-    if (item.x < 0 || item.y < 0 || item.x + size.cols > grid.cols || item.y + size.rows > grid.rows) errors.push(`${item.instanceId} liegt außerhalb des Grids`);
-    for (let y = item.y; y < item.y + size.rows; y += 1) for (let x = item.x; x < item.x + size.cols; x += 1) {
-      const key = `${x}:${y}`;
-      if (occupied.has(key)) errors.push(`Überlappung bei ${key}`);
-      occupied.add(key);
-    }
-  }
-  return { ok: errors.length === 0, errors, occupied: occupied.size, free: grid.cols * grid.rows - occupied.size };
-}
+export function itemGridSize(itemId: string, rotated = false): GridSize { const base = explicitSizes[itemId] ?? fallbackSize(itemId); return rotated ? { cols: base.rows, rows: base.cols } : base; }
+function fallbackSize(itemId: string): GridSize { const item = ITEMS[itemId]; if (!item) return { cols: 1, rows: 1 }; if (item.type === 'ranged_weapon') return { cols: 4, rows: 2 }; if (item.type === 'melee_weapon') return { cols: 1, rows: 3 }; if (item.type === 'backpack' || item.type === 'armor') return { cols: 3, rows: 3 }; if (item.type === 'clothing') return { cols: 2, rows: 2 }; if (item.type === 'drink') return { cols: 1, rows: 2 }; if (item.type === 'tool') return { cols: 2, rows: 1 }; return { cols: 1, rows: 1 }; }
+export function backpackGridSize(backpackId: string | null): GridSize { if (backpackId === 'field_pack') return BALANCE.inventoryConfig.grid.large; if (backpackId === 'hiking_backpack' || backpackId === 'improvised_backpack') return BALANCE.inventoryConfig.grid.medium; if (backpackId === 'small_backpack') return BALANCE.inventoryConfig.grid.small; return BALANCE.inventoryConfig.grid.none; }
+export function equipmentSlotForItem(itemId: string): EquipmentSlot | null { const item = ITEMS[itemId]; if (!item) return null; if (item.type === 'ranged_weapon') return item.id === 'rifle' ? 'primary' : 'secondary'; if (item.type === 'melee_weapon') return 'melee'; if (item.clothingSlot) return item.clothingSlot; if (item.type === 'backpack') return 'backpack'; return null; }
+export function canPlace(items: InventoryGridItem[], grid: GridSize, candidate: InventoryGridItem, x: number, y: number, rotated = candidate.rotated) { const size = itemGridSize(candidate.itemId, rotated); if (x < 0 || y < 0 || x + size.cols > grid.cols || y + size.rows > grid.rows) return false; return !items.some((item) => { if (item.instanceId === candidate.instanceId || item.location !== 'grid') return false; const otherSize = itemGridSize(item.itemId, item.rotated); return x < item.x + otherSize.cols && x + size.cols > item.x && y < item.y + otherSize.rows && y + size.rows > item.y; }); }
+export function firstFreePosition(items: InventoryGridItem[], grid: GridSize, candidate: InventoryGridItem, rotated = candidate.rotated) { const size = itemGridSize(candidate.itemId, rotated); for (let y = 0; y <= grid.rows - size.rows; y += 1) for (let x = 0; x <= grid.cols - size.cols; x += 1) if (canPlace(items, grid, candidate, x, y, rotated)) return { x, y, rotated }; if (size.cols !== size.rows) for (let y = 0; y <= grid.rows - size.cols; y += 1) for (let x = 0; x <= grid.cols - size.rows; x += 1) if (canPlace(items, grid, candidate, x, y, !rotated)) return { x, y, rotated: !rotated }; return null; }
+export function validateGrid(items: InventoryGridItem[], grid: GridSize) { const occupied = new Set<string>(); const errors: string[] = []; for (const item of items.filter((entry) => entry.location === 'grid')) { const size = itemGridSize(item.itemId, item.rotated); if (item.x < 0 || item.y < 0 || item.x + size.cols > grid.cols || item.y + size.rows > grid.rows) errors.push(`${item.instanceId} liegt außerhalb des Grids`); for (let y = item.y; y < item.y + size.rows; y += 1) for (let x = item.x; x < item.x + size.cols; x += 1) { const key = `${x}:${y}`; if (occupied.has(key)) errors.push(`Überlappung bei ${key}`); occupied.add(key); } } return { ok: errors.length === 0, errors, occupied: occupied.size, free: grid.cols * grid.rows - occupied.size }; }
