@@ -1,7 +1,7 @@
 export const BALANCE = {
   debug: { godModeDefault: false, panelDefaultOpen: true, respawnKey: 'F2', godModeKey: 'F3', debugPanelKey: 'F4', respawnPosition: { x: -120, y: 1.75, z: 2 }, respawnHunger: 82, respawnThirst: 82 },
   interaction: { range: 3.4, highlightRange: 3.6, dropDistance: 1.85 },
-  inventoryConfig: { baseCapacity: 10, hotbarSlots: 5 },
+  inventoryConfig: { baseCapacity: 10, hotbarSlots: 5, grid: { none: { cols: 5, rows: 4 }, small: { cols: 6, rows: 5 }, medium: { cols: 7, rows: 6 }, large: { cols: 8, rows: 8 } } },
   viewModel: { defaultScale: 1.15, sway: 0.022, sprintLowering: 0.08 },
   models: { zombieVariations: 5, itemSpinSpeed: 0.55 },
   world: { halfSize: 180, playerBounds: 174, houseCount: 8, treeCount: 180, abandonedVehicleCount: 18, fenceSegmentLength: 7 },
@@ -13,7 +13,7 @@ export const BALANCE = {
   weapons: { fallbackMeleeDamage: 12, fallbackMeleeRange: 1.7, fallbackMeleeNoiseRadius: 3, fallbackMeleeFireRate: 62, pistolShotNoiseRadius: 42, rifleShotNoiseRadius: 62, conditionLossMelee: 1.6, conditionLossShot: 0.8, malfunctionConditionMultiplier: 0.28 },
   access: { houseBreakSeconds: 3, interiorBreakSeconds: 2, metalBreakSeconds: 6, policeBreakSeconds: 7, militaryBreakSeconds: 10, doorBreakNoiseRadius: 32, metalDoorNoiseRadius: 48, lockpickSeconds: 4, lockpickSuccessChance: 0.62, lockpickBreakChance: 0.24, keyNoiseRadius: 2, containerSearchSeconds: 2.5, lockedContainerBreakSeconds: 5, containerBreakNoiseRadius: 22, alarmDurationSeconds: 55, alarmNoiseRadius: 82 },
   storage: { storageBoxCapacity: 34, vehicleTrunkCapacity: 18, groundPackCapacity: 12 },
-  building: { woodWallHp: 180, woodGateHp: 150, barricadeHp: 95, storageBoxHp: 120, fenceSegmentHp: 115, sleepingBagHp: 60, placementDistance: 3.5, buildSeconds: 4, buildNoiseRadius: 12, costs: { wood_wall: { firewood: 3, nails: 2, hammer: 1 }, wood_gate: { firewood: 4, nails: 3, rope: 1, hammer: 1 }, barricade: { firewood: 2, nails: 1, hammer: 1 }, storage_box: { firewood: 2, nails: 2, hammer: 1 }, fence_segment: { firewood: 2, nails: 1, rope: 1, hammer: 1 }, sleeping_bag: { rag: 4, rope: 1 } } },
+  building: { woodWallHp: 180, woodGateHp: 150, barricadeHp: 95, storageBoxHp: 120, fenceSegmentHp: 115, sleepingBagHp: 60, placementDistance: 3.5, buildSeconds: 4, buildNoiseRadius: 12, costs: { wood_wall: { firewood: 3, nails: 2, hammer: 1 }, wood_gate: { firewood: 4, nails: 3, rope: 1, hammer: 1 }, barricade: { firewood: 2, nails: 1, hammer: 1 }, storage_box: { firewood: 2, nails: 2, hammer: 1 }, fence_segment: { firewood: 2, nails: 1, rope: 1 }, sleeping_bag: { rag: 4, rope: 1 } } },
   events: { spawnCheckSeconds: 120, spawnChance: 0.25, maxActiveEvents: 2, eventDurationSeconds: 900, eventLootMultiplier: 1.3, signalRadius: 80 },
   horde: { initialSize: 9, maxHordes: 1, spawnIntervalSeconds: 420, hearingRadius: 115, moveSpeed: 0.55, nightSpeedBonus: 0.2, wanderRadius: 140 },
   repair: { sewingKitAmount: 34, ductTapeAmount: 20, toolboxAmount: 28, weaponCleaningAmount: 32, ruinedRepairAllowed: false },
