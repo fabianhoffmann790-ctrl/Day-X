@@ -7,7 +7,7 @@ button { font: inherit; cursor: pointer; }
 .eyebrow { color: #a7b4a8; letter-spacing: 0.16em; text-transform: uppercase; font-size: 12px; }
 h1 { margin: 0 0 14px; font-size: clamp(46px, 8vw, 96px); line-height: 0.9; }
 .menu-panel p { color: #c5cec3; line-height: 1.6; }
-.menu-panel button, .debug-panel button, .action-buttons button, .hotbar button { padding: 8px 10px; background: #d9dfcf; color: #10130f; border: 0; font-weight: 700; }
+.menu-panel button, .debug-panel button, .action-buttons button, .hotbar button, .context-menu button, .equipment-slot button { padding: 8px 10px; background: #d9dfcf; color: #10130f; border: 0; font-weight: 700; }
 .menu-panel button { margin-top: 24px; padding: 14px 22px; font-weight: 800; }
 .menu-panel small { display: block; margin-top: 14px; color: #90998f; }
 .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
@@ -31,29 +31,39 @@ meter { width: 100%; height: 14px; }
 .hotbar button { display: grid; gap: 2px; padding: 6px; min-height: 42px; background: rgba(255,255,255,0.08); color: #e8ece7; border: 1px solid rgba(255,255,255,0.12); }
 .hotbar button.active { border-color: #f1e4b0; background: rgba(240, 228, 176, 0.16); }
 .hotbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.inventory, .crafting-panel, .storage-panel, .map-panel, .debug-panel { position: fixed; right: 18px; top: 18px; width: 470px; max-height: calc(100vh - 36px); overflow: auto; padding: 18px; background: rgba(8, 10, 9, 0.94); border: 1px solid rgba(255,255,255,0.15); pointer-events: auto; }
-.debug-panel { left: 18px; right: auto; top: auto; bottom: 18px; width: 260px; }
+.grid-inventory, .crafting-panel, .storage-panel, .map-panel, .debug-panel { position: fixed; right: 18px; top: 18px; max-height: calc(100vh - 36px); overflow: auto; padding: 18px; background: rgba(8, 10, 9, 0.95); border: 1px solid rgba(255,255,255,0.15); pointer-events: auto; }
+.grid-inventory { width: min(980px, calc(100vw - 36px)); }
+.debug-panel { left: 18px; right: auto; top: auto; bottom: 18px; width: 280px; }
 .debug-panel button { margin: 3px; background: #f1e4b0; }
-.crafting-panel { right: 504px; width: 360px; }
+.crafting-panel { right: 18px; top: auto; bottom: 18px; width: 360px; }
 .storage-panel { right: 18px; bottom: 18px; top: auto; width: 380px; max-height: 45vh; }
 .map-panel { left: 300px; right: auto; bottom: 18px; top: auto; width: 340px; }
-.inventory h2, .crafting-panel h2, .storage-panel h2, .map-panel h2, .debug-panel h2 { margin-top: 0; }
-.inventory-help { color: #aeb8aa; font-size: 12px; line-height: 1.5; }
-.equipment-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
-.equipment-grid div, .item-details { padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); display: grid; gap: 3px; }
-.equipment-grid strong { font-size: 12px; }
-.equipment-grid span { color: #cbd3c6; font-size: 12px; }
+.grid-inventory h2, .crafting-panel h2, .storage-panel h2, .map-panel h2, .debug-panel h2 { margin-top: 0; }
+.grid-inventory header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
+.grid-inventory header p, .inventory-help { color: #aeb8aa; font-size: 12px; line-height: 1.5; }
+.inventory-layout { display: grid; grid-template-columns: minmax(300px, auto) 310px; gap: 18px; align-items: start; }
+.inventory-grid { display: grid; position: relative; gap: 2px; padding: 8px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.1); width: max-content; max-width: 100%; overflow: auto; }
+.grid-cell { width: 42px; height: 42px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.035); }
+.grid-cell:hover { background: rgba(240, 228, 176, 0.08); }
+.grid-item { z-index: 2; display: grid; align-content: space-between; min-width: 0; padding: 6px; border: 1px solid rgba(240, 228, 176, 0.35); background: linear-gradient(135deg, rgba(97, 89, 61, 0.92), rgba(42, 45, 37, 0.92)); color: #f4efd8; overflow: hidden; user-select: none; cursor: grab; }
+.grid-item:active { cursor: grabbing; }
+.grid-item.selected { outline: 2px solid rgba(216, 237, 255, 0.72); }
+.grid-item strong { font-size: 11px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+.grid-item span { font-size: 10px; color: #cfc7a2; }
+.equipment-slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.equipment-slot { min-height: 66px; padding: 8px; display: grid; gap: 5px; border: 1px solid rgba(255,255,255,0.09); background: rgba(255,255,255,0.045); }
+.equipment-slot small { color: #aeb8aa; }
+.equipment-slot span { color: #6f786d; }
+.equipment-slot button { width: 100%; background: rgba(240, 228, 176, 0.16); color: #f4efd8; border: 1px solid rgba(240, 228, 176, 0.32); }
+.item-details { margin-top: 8px; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); display: grid; gap: 4px; }
 .item-details h3 { margin: 0; }
 .item-details p { margin: 2px 0; color: #cbd3c6; font-size: 12px; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .action-buttons button { font-size: 12px; padding: 6px 8px; }
+.context-menu { position: fixed; z-index: 20; display: grid; gap: 4px; padding: 8px; background: rgba(10, 12, 10, 0.97); border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+.context-menu button { text-align: left; background: rgba(255,255,255,0.08); color: #e8ece7; border: 1px solid rgba(255,255,255,0.08); }
 ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-.inventory li, .storage-panel li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
-.inventory li { cursor: pointer; }
-.inventory li.equipped { border-color: rgba(240, 228, 176, 0.45); background: rgba(240, 228, 176, 0.08); }
-.inventory li.selected { outline: 1px solid rgba(216, 237, 255, 0.6); }
-.inventory li div { display: grid; gap: 3px; }
-.inventory li small { color: #aeb8aa; }
+.storage-panel li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
 .crafting-panel ol { margin: 0; padding-left: 28px; display: grid; gap: 8px; }
 .crafting-panel li { padding: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06); }
 .crafting-panel li.available { border-color: rgba(180, 220, 160, 0.35); }
