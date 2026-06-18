@@ -1,7 +1,7 @@
 export const BALANCE = {
   debug: { godModeDefault: false, panelDefaultOpen: true, respawnKey: 'F2', godModeKey: 'F3', debugPanelKey: 'F4', respawnPosition: { x: -120, y: 1.75, z: 2 }, respawnHunger: 82, respawnThirst: 82 },
   interaction: { range: 3.4, highlightRange: 3.6, dropDistance: 1.85 },
-  inventoryConfig: { baseCapacity: 10, hotbarSlots: 5 },
+  inventoryConfig: { baseCapacity: 10, hotbarSlots: 5, grid: { none: { cols: 5, rows: 4 }, small: { cols: 6, rows: 5 }, medium: { cols: 7, rows: 6 }, large: { cols: 8, rows: 8 } } },
   viewModel: { defaultScale: 1.15, sway: 0.022, sprintLowering: 0.08 },
   models: { zombieVariations: 5, itemSpinSpeed: 0.55 },
   world: { halfSize: 180, playerBounds: 174, houseCount: 8, treeCount: 180, abandonedVehicleCount: 18, fenceSegmentLength: 7 },
