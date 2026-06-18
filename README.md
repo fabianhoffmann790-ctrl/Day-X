@@ -17,6 +17,31 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - `npm run build` erzeugt einen Produktions-Build.
 - `npm run preview` startet die lokale Vorschau des Builds.
 
+## Asset- und Model-Upgrade
+
+Dieser Branch nutzt keine externen Assets. Alle neuen Modelle und Icons sind eigene prozedurale Low-Poly-Assets aus Three.js-Primitiven oder Inline-SVGs.
+
+Neue zentrale Dateien:
+
+- `src/game/AssetRegistry.ts`: zentrale Zuordnung von Item-ID zu Modeltyp, Icon, Kategorie und Viewmodel-Konfiguration.
+- `src/game/ItemModelFactory.ts`: erzeugt erkennbare 3D-Itemmodelle aus der Registry.
+- `src/game/WorldObjectFactory.ts`: erzeugt bessere Low-Poly-Gebäude, Autos, Props, Türen, Container und Lootspots.
+- `ASSETS.md`: dokumentiert, dass keine externen/lizenzpflichtigen Assets genutzt werden.
+
+Verbessert wurden:
+
+- Itemmodels für Nahrung, Getränke, Medizin, Waffen, Munition, Kleidung, Rucksäcke, Werkzeuge und Baumaterial.
+- Inventar-Icons für jedes Item über sichere SVG-Data-URIs ohne kaputte Dateipfade.
+- Icons im Grid, in Hotbar, Equipment, Storage-Liste, Itemdetails und Nähe-Items-Feld.
+- First-Person-Viewmodels für Pistole, Gewehr, Messer, Beil, Brechstange und Holzspeer.
+- Gebäude mit Fenstern, Türen, Dächern, Schildern und Fassadendetails.
+- Ein mehrstöckiger Wohnblock als visueller Testblock mit Etagen-/Treppenhausdetails und zusätzlichen Wohnblock-Lootspots.
+- Autos mit Karosserie, Rädern, Fenstern und Typunterschieden für Auto, Polizeiauto, Krankenwagen, Van und Militärtruck.
+- Weltprops wie Lampen, Schilder, Bänke, Paletten, Fässer, Barrikaden und Müllsäcke.
+- Lootspots sehen mehr wie Kisten/Behälter aus und tragen weiterhin die sichtbaren Itemmodelle.
+
+Hinweis: Der mehrstöckige Wohnblock ist in diesem Schritt optisch und als Loot-/POI-Testblock vorbereitet. Eine echte mehrstöckige Spieler-Kollision/Treppenphysik ist noch nicht vollständig umgesetzt, weil die aktuelle Bewegungslogik den Spieler am Boden ankert.
+
 ## Debug-Steuerung
 
 - F2: Respawn ohne Neuladen
@@ -37,23 +62,6 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Drop auf Hotbar 1-5: Hotbar-Referenz setzen
 - Drag aus “Nahe Items” ins Grid: Weltitem an Zielposition aufnehmen, sofern gültig
 - Doppelklick/Button in “Nahe Items”: Weltitem automatisch aufnehmen
-
-## Bugfixes und Komfortfeatures dieses Schritts
-
-- Grid-Drag-and-Drop hat jetzt eine eigene Live-Vorschau.
-- Gültige Zielzellen werden grün markiert.
-- Ungültige Zielzellen werden rot markiert.
-- Beim Prüfen wird die ursprüngliche Iteminstanz korrekt ignoriert, damit ein Item nicht mit sich selbst kollidiert.
-- “Ungültige Gridposition” entsteht nur noch bei echter Kollision, außerhalb des Grids oder wenn Größe/Rotation nicht passt.
-- Rucksäcke werden beim Aufheben automatisch ausgerüstet, wenn noch kein Rucksack getragen wird.
-- Ein weiterer Rucksack ersetzt den vorhandenen Rucksack nicht automatisch, sondern bleibt ein normales Grid-Item.
-- WorldItems werden mit Scatter-Positionen verteilt und nicht mehr exakt übereinander gelegt.
-- Gleiche stackbare WorldItems werden bis zur MaxStack-Grenze zusammengefasst.
-- Nicht-stackbare Items bleiben einzeln und werden mit Abstand verteilt.
-- Das Inventar zeigt ein Feld “Nahe Items” für WorldItems in der Umgebung.
-- Nahe Items können per Drag-and-Drop oder Button/Doppelklick aufgenommen werden.
-- FPS-Anzeige mit geglätteter Anzeige und Frame-Time wurde ergänzt.
-- Debug-Validierung warnt bei Gridfehlern, ungültigen Hotbar-Referenzen und zu nahen WorldItems.
 
 ## Normale Steuerung
 
@@ -106,22 +114,6 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Ausrüstungsslots akzeptieren nur passende Items.
 - Save/Load speichert Gridposition, Rotation, Stackmenge, Zustand, Ausrüstung, Hotbar und gedroppte WorldItems.
 
-## Weitere Prototyp-Inhalte
-
-- Debug-System mit Respawn-Button, God-Mode-Button, Spielerposition, Zombie-Anzahl, Lootspot-Anzahl und gedroppten Items
-- Sichtbare humanoide Zombie-Modelle aus eigenen Low-Poly-Primitives mit Kopf, Torso, Armen, Beinen, gebeugter Haltung und einfacher Code-Animation
-- Sichtbare Item-Modelle in der Welt für Nahrung, Getränke, Medizin, Waffen, Munition, Ausrüstung, Kleidung, Rucksäcke und Werkzeuge
-- First-Person-Viewmodel-System für ausgerüstete Waffen/Nahkampfwaffen und leere Hände
-- Bestehende Open-World-Platzhalterkarte, Lootspots, Zombies, Survivalwerte, Kleidung, Reparatur, Crafting, Lagerfeuer, Türen, Container, Fahrzeuge, Basebuilding, Storage, Events, Horden und Orientierung
-- Persistentes Save-System über `localStorage`
-- Zentrale Modellzuordnung: `src/game/ItemModelFactory.ts`
-- First-Person-Viewmodel: `src/game/FirstPersonViewModelSystem.ts`
-- Weltitems/Drop/Pickup: `src/game/ItemWorldSystem.ts`
-- Zombie-Modelle: `src/game/ZombieModelFactory.ts`
-- Grid-Logik: `src/game/InventoryGrid.ts`
-- Inventar-Instanzlogik: `src/game/Inventory.ts`
-- Zentrale Balancing-Datei: `src/game/Balance.ts`
-
 ## Design-Regel
 
-Das Projekt nutzt ausschließlich primitive Platzhalter-Assets. Spätere echte 3D-Modelle können über die Model-Factories durch `.glb/.gltf`-Modelle ersetzt werden.
+Das Projekt nutzt ausschließlich eigene prozedurale Low-Poly-Modelle und generierte SVG-Icons. Spätere echte 3D-Modelle können über die zentralen Registries durch `.glb/.gltf`-Modelle und Icon-Dateien ersetzt werden.
