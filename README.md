@@ -22,8 +22,9 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - F2: Respawn ohne Neuladen
 - F3: God Mode ein-/ausschalten
 - F4: Debug-Panel ein-/ausblenden
+- F8: FPS-Anzeige ein-/ausschalten
 - F10: Debug-Lootrespawn
-- Debug-Panel: Testitems hinzufügen, Inventar leeren, Grid validieren
+- Debug-Panel: Testitems, Testloot am Spieler, Ammo-Cluster, Nonstack-Scatter, kleiner/großer Rucksack, Inventar leeren, Grid validieren, FPS umschalten
 
 ## Inventar-Steuerung
 
@@ -34,7 +35,25 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - R während des Ziehens: Item-Rotation umschalten
 - Drop auf Ausrüstungsslot: Item ausrüsten, wenn passend
 - Drop auf Hotbar 1-5: Hotbar-Referenz setzen
-- Kontextmenü: benutzen, ausrüsten, Stack teilen, rotieren, droppen, wegwerfen
+- Drag aus “Nahe Items” ins Grid: Weltitem an Zielposition aufnehmen, sofern gültig
+- Doppelklick/Button in “Nahe Items”: Weltitem automatisch aufnehmen
+
+## Bugfixes und Komfortfeatures dieses Schritts
+
+- Grid-Drag-and-Drop hat jetzt eine eigene Live-Vorschau.
+- Gültige Zielzellen werden grün markiert.
+- Ungültige Zielzellen werden rot markiert.
+- Beim Prüfen wird die ursprüngliche Iteminstanz korrekt ignoriert, damit ein Item nicht mit sich selbst kollidiert.
+- “Ungültige Gridposition” entsteht nur noch bei echter Kollision, außerhalb des Grids oder wenn Größe/Rotation nicht passt.
+- Rucksäcke werden beim Aufheben automatisch ausgerüstet, wenn noch kein Rucksack getragen wird.
+- Ein weiterer Rucksack ersetzt den vorhandenen Rucksack nicht automatisch, sondern bleibt ein normales Grid-Item.
+- WorldItems werden mit Scatter-Positionen verteilt und nicht mehr exakt übereinander gelegt.
+- Gleiche stackbare WorldItems werden bis zur MaxStack-Grenze zusammengefasst.
+- Nicht-stackbare Items bleiben einzeln und werden mit Abstand verteilt.
+- Das Inventar zeigt ein Feld “Nahe Items” für WorldItems in der Umgebung.
+- Nahe Items können per Drag-and-Drop oder Button/Doppelklick aufgenommen werden.
+- FPS-Anzeige mit geglätteter Anzeige und Frame-Time wurde ergänzt.
+- Debug-Validierung warnt bei Gridfehlern, ungültigen Hotbar-Referenzen und zu nahen WorldItems.
 
 ## Normale Steuerung
 
@@ -54,7 +73,7 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - P: gewähltes Basebuilding-Element platzieren
 - O: erstes nicht-ausgerüstetes Item in offene Storage-Kiste legen
 - Esc: Inventar/Storage schließen
-- R: Ausgerüstete Schusswaffe nachladen, wenn Inventar nicht zieht
+- R: Ausgerüstete Schusswaffe nachladen, wenn kein Item gezogen wird
 - V: beste Rüstung/Kleidung ausrüsten
 - B: besten Rucksack ausrüsten
 - F: beste Nahrung essen
@@ -85,14 +104,13 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Rucksack-Wechsel wird verhindert, wenn das kleinere Grid die vorhandenen Items nicht tragen kann.
 - Hotbar referenziert Iteminstanzen und dupliziert keine Items.
 - Ausrüstungsslots akzeptieren nur passende Items.
-- Save/Load speichert Gridposition, Rotation, Stackmenge, Zustand, Ausrüstung und Hotbar.
+- Save/Load speichert Gridposition, Rotation, Stackmenge, Zustand, Ausrüstung, Hotbar und gedroppte WorldItems.
 
 ## Weitere Prototyp-Inhalte
 
 - Debug-System mit Respawn-Button, God-Mode-Button, Spielerposition, Zombie-Anzahl, Lootspot-Anzahl und gedroppten Items
 - Sichtbare humanoide Zombie-Modelle aus eigenen Low-Poly-Primitives mit Kopf, Torso, Armen, Beinen, gebeugter Haltung und einfacher Code-Animation
 - Sichtbare Item-Modelle in der Welt für Nahrung, Getränke, Medizin, Waffen, Munition, Ausrüstung, Kleidung, Rucksäcke und Werkzeuge
-- Dropped-Item-System: Inventaritems können als 3D-Objekt vor dem Spieler abgelegt und wieder mit E aufgehoben werden
 - First-Person-Viewmodel-System für ausgerüstete Waffen/Nahkampfwaffen und leere Hände
 - Bestehende Open-World-Platzhalterkarte, Lootspots, Zombies, Survivalwerte, Kleidung, Reparatur, Crafting, Lagerfeuer, Türen, Container, Fahrzeuge, Basebuilding, Storage, Events, Horden und Orientierung
 - Persistentes Save-System über `localStorage`
@@ -103,10 +121,6 @@ Danach die lokale Vite-Adresse im Browser öffnen, meistens `http://localhost:51
 - Grid-Logik: `src/game/InventoryGrid.ts`
 - Inventar-Instanzlogik: `src/game/Inventory.ts`
 - Zentrale Balancing-Datei: `src/game/Balance.ts`
-
-## Aktueller Container-Stand
-
-Container und Storage bleiben in diesem Schritt noch beim bestehenden Storage-System mit einfacher Transfer-Bedienung. Die neue Grid-Logik ist so aufgebaut, dass Container-Grids als nächster Schritt dieselben Platzierungs- und Serialisierungsfunktionen nutzen können.
 
 ## Design-Regel
 

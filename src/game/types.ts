@@ -31,12 +31,13 @@ export interface GridSize { cols: number; rows: number; }
 export interface InventoryGridItem { instanceId: string; itemId: string; count: number; x: number; y: number; rotated: boolean; durability: number; freshness?: FoodFreshness; location: InventoryLocation; equipmentSlot?: EquipmentSlot | null; customData?: Record<string, unknown>; }
 export interface GridItemView extends InventoryEntry { instanceId: string; itemId: string; x: number; y: number; w: number; h: number; rotated: boolean; maxStack: number; equipmentSlot?: EquipmentSlot | null; }
 export interface InventoryEntry { id: string; instanceId?: string; itemId?: string; name: string; type: ItemType; count: number; size: number; weight: number; totalWeight: number; condition: ItemCondition; conditionLabel: string; freshness?: FoodFreshness; equipped: boolean; canUse: boolean; canEquip: boolean; description: string; }
+export interface NearbyWorldItemView { id: string; itemId: string; name: string; type: ItemType; count: number; conditionLabel: string; distance: number; weight: number; totalWeight: number; description: string; w: number; h: number; maxStack: number; rotated?: boolean; }
 export interface HotbarSlot { slot: number; instanceId: string | null; itemId: string | null; label: string; }
 export interface GridInventoryView { cols: number; rows: number; usedCells: number; freeCells: number; items: GridItemView[]; equipment: Partial<Record<EquipmentSlot, GridItemView | null>>; validationOk: boolean; validationErrors: string[]; }
 export interface InventorySaveData { items: Array<[string, number]>; equippedWeaponId: string | null; equippedArmorId: string | null; equippedBackpackId: string | null; itemDurability?: Record<string, number>; itemFreshness?: Record<string, FoodFreshness>; clothingSlots?: Partial<Record<ClothingSlot, string | null>>; hotbar?: Array<[number, string | null]>; gridItems?: InventoryGridItem[]; equipmentSlots?: Partial<Record<EquipmentSlot, string | null>>; }
 export interface PlayerVitals { hp: number; stamina: number; hunger: number; thirst: number; bleeding: boolean; infection: number; infected: boolean; bodyTemperature: number; wetness: number; cold: number; illness: number; sick: boolean; pain: number; unconscious: boolean; fracture: boolean; }
 export interface CraftingRecipeView { id: string; name: string; available: boolean; timeSeconds: number; missing: string[]; }
-export interface DebugHudState { godMode: boolean; debugPanelOpen: boolean; playerPosition: string; zombieCount: number; lootSpotCount: number; droppedItemCount: number; gridFreeCells?: number; gridUsedCells?: number; }
+export interface DebugHudState { godMode: boolean; debugPanelOpen: boolean; playerPosition: string; zombieCount: number; lootSpotCount: number; droppedItemCount: number; gridFreeCells?: number; gridUsedCells?: number; worldOverlapWarnings?: number; showFps?: boolean; }
 
 export interface HudState {
   hp: number; stamina: number; hunger: number; thirst: number; bleeding: boolean; infection: number; infected: boolean; bodyTemperature: number; wetness: number; cold: number; illness: number; sick: boolean; pain: number; unconscious: boolean; fracture: boolean;
@@ -44,6 +45,7 @@ export interface HudState {
   weapon: string; weaponCondition: string; ammo: number; ammoText: string; currentBackpack: string; currentArmor: string; clothing: Record<ClothingSlot, string>;
   zombiesAlerted: number; interactionPrompt: string; message: string; warning: string; inventoryOpen: boolean; craftingOpen: boolean; craftingRecipes: CraftingRecipeView[]; inventory: InventoryEntry[]; gridInventory?: GridInventoryView;
   selectedItemId: string | null; hotbar: HotbarSlot[]; debug: DebugHudState;
+  fps: number; frameMs: number; showFps: boolean; nearbyItems: NearbyWorldItemView[];
   timeText: string; weather: WeatherType; noiseLevel: string; actionLabel: string; actionProgress: number; nearbyFireWarmth: number; damageFlash: number;
   worldPrompt: string; locationName: string; eventHint: string; compassHeading: string; mapOpen: boolean; buildMode: boolean; selectedBuildable: string; storageOpen: boolean; storageTitle: string; storageUsed: number; storageCapacity: number; storageItems: InventoryEntry[];
 }
